@@ -294,6 +294,24 @@ pio run -d firmware -t upload
 
 See `tools/README.md` for details.
 
+### Drawing your own
+
+`tools/anim_editor.html` is the drawing surface: a 20×20 or 40×40 grid with the
+16-colour cap enforced, per-frame hold times, onion skin, and both device
+previews on black — because a colour that looks fine on white can vanish on the
+panel, and a shape that reads at 24px can turn to mush at 4px.
+
+It is one self-contained file. No build step, no install, no server: open it
+from disk, or use the hosted copy.
+
+**→ [Clawdmeter animation editor](https://tb1982.github.io/Clawdmeter/tools/anim_editor.html)**
+
+Every animation in the catalogue is embedded as a loadable sample, so an
+existing one can be opened and altered rather than rebuilt from an empty grid.
+Export the JSON into `tools/drawn_anims/`, run `node tools/convert_to_c.js`, and
+add the name to a rate group in `firmware/src/splash.cpp` — a JSON on its own is
+never picked, the name has to be listed.
+
 ## Credits
 
 - Pixel-art Clawd animation by [@amaanbuilds](https://x.com/amaanbuilds), sourced from [claudepix.vercel.app](https://claudepix.vercel.app). Frame data and palettes scraped + converted by the tooling in `tools/`.

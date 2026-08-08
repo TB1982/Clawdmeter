@@ -5,6 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Clawdmeter 動畫編輯器</title>
 <link id="favicon" rel="icon" href="data:,">
+<meta name="theme-color" content="#14120f">
+
+<!-- Search metadata. Everything from here to the end of the JSON-LD block is
+     specific to this fork's GitHub Pages site — it names tb1982.github.io and
+     is of no use to anyone who has not published this page. The tool itself is
+     what goes upstream; this is site plumbing that happens to live in the same
+     file, so a branch destined for upstream is cut from origin/main rather than
+     from here.
+
+     English, like the card text, because a crawler reads this once and shows
+     one result to everyone. The page still picks its own language in the
+     browser. All four languages share this single URL, which is a deliberate
+     trade: splitting them would mean four files and lose the one property this
+     editor is built around — one document that opens straight off disk. -->
+<meta name="description" content="Draw 20×20 and 40×40 pixel-art animations for the Clawdmeter ESP32 splash screen. Runs entirely in the browser, previews at device scale on black, exports JSON.">
+<link rel="canonical" href="https://tb1982.github.io/Clawdmeter/tools/anim_editor.html">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Clawdmeter animation editor",
+  "url": "https://tb1982.github.io/Clawdmeter/tools/anim_editor.html",
+  "description": "A browser-based pixel-art editor for the Clawdmeter ESP32 splash screen: 20×20 and 40×40 grids, a 16-colour cap, per-frame hold times, onion skin, and previews at device scale on black.",
+  "applicationCategory": "DesignApplication",
+  "operatingSystem": "Any browser",
+  "browserRequirements": "Requires JavaScript. No install, no server.",
+  "inLanguage": ["zh-Hant", "en", "ja", "zh-Hans"],
+  "isPartOf": {
+    "@type": "SoftwareSourceCode",
+    "name": "Clawdmeter",
+    "codeRepository": "https://github.com/TB1982/Clawdmeter"
+  }
+}
+</script>
 
 <!-- Link preview. The URLs have to be absolute — a scraper has no page to
      resolve a relative path against — which makes them specific to where this

@@ -1,0 +1,7 @@
+# GitHub Pages serves no robots.txt of its own, so a crawler arriving here gets
+# a 404 and no pointer to the sitemap. This is that pointer. Nothing is
+# disallowed — the whole repository is public already.
+User-agent: *
+Allow: /
+
+Sitemap: https://tb1982.github.io/Clawdmeter/sitemap.xml
