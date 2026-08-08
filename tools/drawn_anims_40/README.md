@@ -32,5 +32,7 @@ link with `hanabi big` included; both C6 environments stop at the
 2. Add the animation's name to a rate group in `splash.cpp` (`GROUP_NAMES`).
    `"hanabi big"` is in no group today, so it would never be picked even in a
    build that contains it — the catalog is matched by literal name.
-3. `anim_editor.html` is still fixed at 20x20 (`const N = 20`). Nothing here
-   can be edited in the editor yet; `hanabi big` was produced outside it.
+Editing these is no longer a gap: `anim_editor.html` carries a size control and
+opens, edits and exports 40x40. Growing a 20x20 animation into one is lossless
+(each cell becomes a 2x2 block), so an existing animation can be loaded, grown
+and then refined.

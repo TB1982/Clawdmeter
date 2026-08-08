@@ -134,6 +134,16 @@
               <option>Idle</option><option>Work</option>
               <option>Dance</option><option>Expressions</option>
             </select></div>
+          <!-- Size sits with name and category because that is what it is: a
+               property of the animation, not a view setting. Changing it here
+               rewrites every frame, which is why it is not next to the zoom-ish
+               controls where someone would expect it to be harmless. -->
+          <div class="row"><span style="width:44px" data-i18n="labelSize">尺寸</span>
+            <select id="gridsize">
+              <option value="20">20 × 20</option>
+              <option value="40">40 × 40</option>
+            </select></div>
+          <p class="sub" id="sizemsg" style="margin:6px 0 0;font-size:11px;line-height:1.5"></p>
         </div>
 
     <div class="panel">
@@ -216,11 +226,13 @@
             <div class="previews">
               <div><canvas id="pv-splash" width="480" height="480"
                    style="width:240px;height:240px"></canvas>
-                   <div class="cap" data-i18n="capSplash">全螢幕 splash · 每格 24px</div></div>
+                   <!-- Not data-i18n: the per-cell figure changes with the grid
+                        size, so these are written by syncSizeUI(). -->
+                   <div class="cap" id="cap-splash">全螢幕 splash · 每格 24px</div></div>
               <div class="badgerow">
                 <div><canvas id="pv-badge" width="80" height="80"
                      style="width:80px;height:80px"></canvas>
-                     <div class="cap" data-i18n="capBadge">角落徽章 · 每格 4px</div></div>
+                     <div class="cap" id="cap-badge">角落徽章 · 每格 4px</div></div>
                 <button id="play">▶ 播放</button>
               </div>
             </div>
@@ -268,7 +280,18 @@
 // SPLASH_PALETTE_SIZE — a bigger palette can't be represented on the device.
 // Keep this in step with PALETTE_SIZE in tools/convert_to_c.js; the converter
 // rejects a file that exceeds it rather than silently dropping colours.
-const N = 20, PALETTE_MAX = 16;
+const PALETTE_MAX = 16;
+
+// The grid side is a property of the animation, not of the editor. Keep this in
+// step with GRID_SIZES in tools/convert_to_c.js, which reads the side off frame
+// 0 and rejects anything else.
+//
+// 40 is the only size beyond 20 because it is exactly 2x: every 20x20 cell
+// becomes a 2x2 block, so growing an animation costs nothing and looks
+// identical on the panel until you refine it. 32 or 48 would need interpolation
+// — which is a redraw, not a resize.
+const GRID_SIZES = [20, 40];
+let N = 20;                    // current side; changed only via setGridSize()
 
 // Packed frame strings (the embedded samples and TEMPLATE) store one character
 // per cell: '.' for empty, otherwise the palette index in base-36. Digits mean
@@ -287,20 +310,23 @@ const LANGS = { 'zh-TW': '繁體中文', 'en': 'English', 'ja': '日本語', 'zh
 const I18N = {
 'zh-TW': {
   title: 'Clawdmeter 動畫編輯器',
-  sub: '20×20 · 最多 {max} 色 · 每格獨立停留時間 · 匯出可直接丟進 <code>tools/drawn_anims/</code>',
+  sub: '{side}×{side} · 最多 {max} 色 · 每格獨立停留時間 · 匯出可直接丟進 <code>tools/drawn_anims/</code>',
   pen: '畫筆', erase: '橡皮擦', fill: '填滿', pick: '滴管', select: '選取',
   undo: '復原', onion: '洋蔥皮', paste: '貼上', play: '▶ 播放', stop: '■ 停止',
   selecting: '選取中 ·', copy: '複製', flipH: '左右翻', flipV: '上下翻',
   clearSel: '清除', selectAll: '全選', deselect: '取消選取',
   selHint: '方向鍵推一格 · Esc 放下 · 複製後可貼到別的影格',
   previewH: '實機預覽（黑底，裝置實際尺寸）',
-  capSplash: '全螢幕 splash · 每格 24px', capBadge: '角落徽章 · 每格 4px',
+  capSplash: '全螢幕 splash · 每格 {px}px', capBadge: '角落徽章 · 每格 {px}px',
   palH: '這支動畫的顏色', pickH: '選色',
   pickHint: '點一下就加進上面並選取。已經在用的會直接選取。', addColour: '加入',
   framesH: '影格', frameHint: '沒有選取範圍時，← → 可以快速切換影格',
   frameAdd: '+ 新增', frameDup: '複製本格', frameDel: '刪除',
   frameLeft: '← 前移', frameRight: '後移 →',
-  infoH: '動畫資訊', labelName: '名稱', labelCat: '分類',
+  infoH: '動畫資訊', labelName: '名稱', labelCat: '分類', labelSize: '尺寸',
+  sizeUp: '已放大到 40×40：每格拆成 2×2，畫面看起來完全一樣，接下來可以細修。',
+  sizeDown: '已縮小到 20×20：每 2×2 格併成一格，細節會流失。想還原按 Cmd-Z（或上面的復原）。',
+  badSize: '這支動畫是 {n}×{n}，編輯器只支援 {ok}。',
   loadH: '載入現有動畫', loadBtn: '載入', loadPose: '載入 Clawd 樣板', clearAll: '清空',
   credit: '動畫改作自 <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a>'
         + '（作者 <a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a>），'
@@ -329,20 +355,23 @@ const I18N = {
 },
 'en': {
   title: 'Clawdmeter animation editor',
-  sub: '20×20 · {max} colours max · per-frame hold times · export straight into <code>tools/drawn_anims/</code>',
+  sub: '{side}×{side} · {max} colours max · per-frame hold times · export straight into <code>tools/drawn_anims/</code>',
   pen: 'Pen', erase: 'Eraser', fill: 'Fill', pick: 'Eyedropper', select: 'Select',
   undo: 'Undo', onion: 'Onion skin', paste: 'Paste', play: '▶ Play', stop: '■ Stop',
   selecting: 'Selected ·', copy: 'Copy', flipH: 'Flip H', flipV: 'Flip V',
   clearSel: 'Clear', selectAll: 'Select all', deselect: 'Deselect',
   selHint: 'Arrows nudge a cell · Esc puts it down · copy to paste into another frame',
   previewH: 'On-device preview (black, actual size)',
-  capSplash: 'Full splash · 24px per cell', capBadge: 'Corner badge · 4px per cell',
+  capSplash: 'Full splash · {px}px per cell', capBadge: 'Corner badge · {px}px per cell',
   palH: "This animation's colours", pickH: 'Colours',
   pickHint: 'Click to add and select. Already in use selects directly.', addColour: 'Add',
   framesH: 'Frames', frameHint: 'With nothing selected, ← → step through frames',
   frameAdd: '+ Add', frameDup: 'Duplicate', frameDel: 'Delete',
   frameLeft: '← Move left', frameRight: 'Move right →',
-  infoH: 'Animation', labelName: 'Name', labelCat: 'Category',
+  infoH: 'Animation', labelName: 'Name', labelCat: 'Category', labelSize: 'Size',
+  sizeUp: 'Grown to 40×40: every cell became a 2×2 block, so it looks identical — now it can be refined.',
+  sizeDown: 'Shrunk to 20×20: each 2×2 block became one cell, so detail was lost. Cmd-Z (or Undo) puts it back.',
+  badSize: 'This animation is {n}×{n}; the editor supports {ok}.',
   loadH: 'Load an existing animation', loadBtn: 'Load', loadPose: 'Load Clawd template', clearAll: 'Clear',
   credit: 'Animations adapted from <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a> '
         + 'by <a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a>; '
@@ -371,20 +400,23 @@ const I18N = {
 },
 'ja': {
   title: 'Clawdmeter アニメーションエディタ',
-  sub: '20×20 · 最大{max}色 · コマごとの表示時間 · 書き出しはそのまま <code>tools/drawn_anims/</code> へ',
+  sub: '{side}×{side} · 最大{max}色 · コマごとの表示時間 · 書き出しはそのまま <code>tools/drawn_anims/</code> へ',
   pen: 'ペン', erase: '消しゴム', fill: '塗りつぶし', pick: 'スポイト', select: '選択',
   undo: '元に戻す', onion: 'オニオンスキン', paste: '貼り付け', play: '▶ 再生', stop: '■ 停止',
   selecting: '選択中 ·', copy: 'コピー', flipH: '左右反転', flipV: '上下反転',
   clearSel: '消去', selectAll: 'すべて選択', deselect: '選択解除',
   selHint: '矢印キーで1マス移動 · Escで確定 · コピーすれば他のコマにも貼れます',
   previewH: '実機プレビュー（黒背景・実寸）',
-  capSplash: '全画面スプラッシュ · 1マス24px', capBadge: '隅のバッジ · 1マス4px',
+  capSplash: '全画面スプラッシュ · 1マス{px}px', capBadge: '隅のバッジ · 1マス{px}px',
   palH: 'このアニメーションの色', pickH: '色を選ぶ',
   pickHint: 'クリックで上に追加して選択。使用中の色はそのまま選択されます。', addColour: '追加',
   framesH: 'コマ', frameHint: '選択範囲がないときは ← → でコマを切り替えられます',
   frameAdd: '+ 追加', frameDup: 'このコマを複製', frameDel: '削除',
   frameLeft: '← 前へ', frameRight: '後ろへ →',
-  infoH: 'アニメーション情報', labelName: '名前', labelCat: '分類',
+  infoH: 'アニメーション情報', labelName: '名前', labelCat: '分類', labelSize: 'サイズ',
+  sizeUp: '40×40 に拡大しました：各マスが 2×2 になったので見た目は同じです。ここから描き込めます。',
+  sizeDown: '20×20 に縮小しました：2×2 のマスが 1 マスにまとまるため、細部は失われます。Cmd-Z（または元に戻す）で戻せます。',
+  badSize: 'このアニメーションは {n}×{n} です。エディターが対応しているのは {ok} です。',
   loadH: '既存のアニメーションを読み込む', loadBtn: '読み込む', loadPose: 'Clawd テンプレート', clearAll: 'クリア',
   credit: 'アニメーションは <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a>'
         + '（<a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a> 作）を改変したものです。'
@@ -413,20 +445,23 @@ const I18N = {
 },
 'zh-CN': {
   title: 'Clawdmeter 动画编辑器',
-  sub: '20×20 · 最多 {max} 色 · 每格独立停留时间 · 导出可直接丢进 <code>tools/drawn_anims/</code>',
+  sub: '{side}×{side} · 最多 {max} 色 · 每格独立停留时间 · 导出可直接丢进 <code>tools/drawn_anims/</code>',
   pen: '画笔', erase: '橡皮擦', fill: '填充', pick: '吸管', select: '选取',
   undo: '撤销', onion: '洋葱皮', paste: '粘贴', play: '▶ 播放', stop: '■ 停止',
   selecting: '选取中 ·', copy: '复制', flipH: '左右翻', flipV: '上下翻',
   clearSel: '清除', selectAll: '全选', deselect: '取消选取',
   selHint: '方向键推一格 · Esc 放下 · 复制后可粘贴到别的帧',
   previewH: '真机预览（黑底，设备实际尺寸）',
-  capSplash: '全屏 splash · 每格 24px', capBadge: '角落徽章 · 每格 4px',
+  capSplash: '全屏 splash · 每格 {px}px', capBadge: '角落徽章 · 每格 {px}px',
   palH: '这支动画的颜色', pickH: '选色',
   pickHint: '点一下就加进上面并选取。已经在用的会直接选取。', addColour: '加入',
   framesH: '帧', frameHint: '没有选取范围时，← → 可以快速切换帧',
   frameAdd: '+ 新增', frameDup: '复制本帧', frameDel: '删除',
   frameLeft: '← 前移', frameRight: '后移 →',
-  infoH: '动画信息', labelName: '名称', labelCat: '分类',
+  infoH: '动画信息', labelName: '名称', labelCat: '分类', labelSize: '尺寸',
+  sizeUp: '已放大到 40×40：每格拆成 2×2，画面看起来完全一样，接下来可以细修。',
+  sizeDown: '已缩小到 20×20：每 2×2 格并成一格，细节会流失。想还原按 Cmd-Z（或上面的撤销）。',
+  badSize: '这支动画是 {n}×{n}，编辑器只支持 {ok}。',
   loadH: '载入现有动画', loadBtn: '载入', loadPose: '载入 Clawd 模板', clearAll: '清空',
   credit: '动画改作自 <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a>'
         + '（作者 <a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a>），'
@@ -463,6 +498,11 @@ function t(key, vars) {
   // in at each call site, so moving PALETTE_MAX can't leave a stale number
   // behind in one of the four languages.
   s = s.split('{max}').join(PALETTE_MAX);
+  // {side} is the current grid side, substituted globally for the same reason:
+  // it appears in prose in four languages, and a per-call-site variable would
+  // leave one of them stale the first time someone adds a string. Not named
+  // {n} because several strings already use {n} for their own local variable.
+  s = s.split('{side}').join(N);
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
   return s;
 }
@@ -613,10 +653,79 @@ const isDark = h => h !== 'transparent' &&
 
 // ── drawing surface ──────────────────────────────────────────────────────────
 const grid = $('grid'), gx = grid.getContext('2d');
-const CELL = 24;
+
+// The drawing surface stays 480px whatever the grid side is, so a 40x40
+// animation is drawn at 12px per cell rather than on a canvas twice the size.
+// That matches the device, where both sides cover the same physical area.
+const CANVAS_PX = 480;
+let CELL = CANVAS_PX / N;      // 24 at 20x20, 12 at 40x40
+
+// 20 -> 40: every cell becomes a 2x2 block. Nothing is lost and nothing moves,
+// so the animation looks the same until it is refined.
+const upscale = g => {
+  const out = Array.from({length: g.length * 2}, () => new Array(g.length * 2).fill(0));
+  for (let r = 0; r < g.length; r++) for (let c = 0; c < g.length; c++) {
+    const v = g[r][c];
+    out[r*2][c*2] = out[r*2][c*2+1] = out[r*2+1][c*2] = out[r*2+1][c*2+1] = v;
+  }
+  return out;
+};
+
+// 40 -> 20: four cells collapse into one, so this throws detail away. Each 2x2
+// block votes and the majority wins; a tie goes to whichever value appears
+// first, scanning the block in reading order. Picking one corner instead would
+// drop a one-cell highlight half the time depending on which corner it sat in.
+const downscale = g => {
+  const n = g.length / 2;
+  const out = Array.from({length: n}, () => new Array(n).fill(0));
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    const quad = [g[r*2][c*2], g[r*2][c*2+1], g[r*2+1][c*2], g[r*2+1][c*2+1]];
+    let best = quad[0], bestCount = 0;
+    for (const v of quad) {
+      const count = quad.filter(x => x === v).length;
+      if (count > bestCount) { best = v; bestCount = count; }
+    }
+    out[r][c] = best;
+  }
+  return out;
+};
+
+// The one place N changes. Everything derived from it is recomputed here, so no
+// caller has to remember that CELL exists.
+function setGridSize(n, {resample = true} = {}) {
+  if (!GRID_SIZES.includes(n) || n === N) return false;
+  if (resample) {
+    const f = n > N ? upscale : downscale;
+    frames = frames.map(fr => ({ hold: fr.hold, grid: f(fr.grid) }));
+  }
+  N = n;
+  CELL = CANVAS_PX / N;
+  sel = null; clip = null;     // both hold cell coordinates at the old scale
+  syncSizeUI();
+  return true;
+}
+
+// Adopt the side a loaded animation is already drawn at, without resampling it.
+function adoptGridSize(n) {
+  if (!GRID_SIZES.includes(n)) throw new Error(t('badSize', {n, ok: GRID_SIZES.join(' / ')}));
+  if (n !== N) { N = n; CELL = CANVAS_PX / N; sel = null; clip = null; }
+  syncSizeUI();
+}
+
+function syncSizeUI() {
+  const s = $('gridsize');
+  if (s) s.value = String(N);
+  const cap = $('cap-splash'), capB = $('cap-badge');
+  if (cap)  cap.textContent  = t('capSplash', {px: CANVAS_PX / N});
+  if (capB) capB.textContent = t('capBadge',  {px: 80 / N});
+  // The strapline states the grid side, so it is re-rendered here rather than
+  // only on a language change.
+  const sub = document.querySelector('[data-i18n-html="sub"]');
+  if (sub) sub.innerHTML = t('sub');
+}
 
 function paintGrid() {
-  gx.fillStyle = '#000'; gx.fillRect(0, 0, 480, 480);
+  gx.fillStyle = '#000'; gx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
 
   // Onion skin: the previous frame at low alpha. Motion at this resolution is
   // one or two cells, and without a ghost to line up against it's guesswork.
@@ -666,10 +775,16 @@ function paintGrid() {
     }
   }
 
-  gx.strokeStyle = 'rgba(255,255,255,.07)'; gx.lineWidth = 1;
+  gx.lineWidth = 1;
   for (let i = 0; i <= N; i++) {
-    gx.beginPath(); gx.moveTo(i*CELL+.5, 0); gx.lineTo(i*CELL+.5, 480); gx.stroke();
-    gx.beginPath(); gx.moveTo(0, i*CELL+.5); gx.lineTo(480, i*CELL+.5); gx.stroke();
+    // At 40x40 the cells are 12px and every line looks like every other one, so
+    // counting across to find a coordinate stops working. Every fifth line is
+    // brighter to give the eye something to count in. At 20x20 the cells are big
+    // enough that this would only be clutter, so it isn't drawn.
+    gx.strokeStyle = (N > 20 && i % 5 === 0)
+      ? 'rgba(255,255,255,.16)' : 'rgba(255,255,255,.07)';
+    gx.beginPath(); gx.moveTo(i*CELL+.5, 0); gx.lineTo(i*CELL+.5, CANVAS_PX); gx.stroke();
+    gx.beginPath(); gx.moveTo(0, i*CELL+.5); gx.lineTo(CANVAS_PX, i*CELL+.5); gx.stroke();
   }
 
   if (sel) {
@@ -761,8 +876,13 @@ grid.addEventListener('pointerup', () => { drawing = false; selDrag = null; });
 // Both device scales, on black, because that's the only way to see what the
 // panel will actually show. A colour that looks fine on white can vanish here,
 // and a shape that reads at 24px can turn to mush at 4px.
-function paintPreview(canvas, cell, frameIdx) {
+// The per-cell size is derived from the canvas rather than passed in: every
+// preview here is a fixed physical size on the device (480px splash, 80px
+// badge, 40px thumbnail), so growing the grid makes the cells smaller, not the
+// preview bigger. That is exactly what the panel does.
+function paintPreview(canvas, frameIdx) {
   const cx = canvas.getContext('2d');
+  const cell = canvas.width / N;
   cx.fillStyle = '#000'; cx.fillRect(0, 0, canvas.width, canvas.height);
   const g = frames[frameIdx].grid;
   for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
@@ -954,7 +1074,7 @@ function renderFrames() {
       selCommit(); cur = i; renderAll();
     };
     box.appendChild(d);
-    paintPreview(cv, 2, i);
+    paintPreview(cv, i);
   });
 }
 $('f-add').onclick = () => { selCommit(); pushUndo(); frames.splice(cur+1, 0, {hold:200, grid:blank()}); cur++; renderAll(); };
@@ -979,8 +1099,8 @@ $('f-right').onclick = () => { selCommit(); if (cur === frames.length-1) return;
 // a blink — so a preview at constant speed would be lying about the result.
 let playTimer = null, playIdx = 0;
 function step() {
-  paintPreview($('pv-splash'), 24, playIdx);
-  paintPreview($('pv-badge'), 4, playIdx);
+  paintPreview($('pv-splash'), playIdx);
+  paintPreview($('pv-badge'), playIdx);
   const hold = frames[playIdx].hold;
   playIdx = (playIdx + 1) % frames.length;
   playTimer = setTimeout(step, hold);
@@ -1079,21 +1199,44 @@ function describeSample() {
 $('load-sample').onclick = () => {
   const a = SAMPLES[+$('sample').value]; if (!a) return;
   sel = null; pushUndo();
+  // One packed character per cell, so the string length is the side squared.
+  // The sample carries its own size and the editor takes it rather than
+  // assuming the size the canvas happens to be on right now.
+  const side = Math.round(Math.sqrt(a.f[0].g.length));
+  try { adoptGridSize(side); }
+  catch (err) { $('sizemsg').innerHTML = `<span class="warn">${err.message}</span>`; return; }
   palette = [...a.p];
   frames = a.f.map(f => ({
     hold: f.h,
-    grid: Array.from({length: N}, (_, r) =>
-      [...f.g.slice(r*N, (r+1)*N)].map(cell)),
+    grid: Array.from({length: side}, (_, r) =>
+      [...f.g.slice(r*side, (r+1)*side)].map(cell)),
   }));
   $('name').value = a.n; $('category').value = a.c;
+  $('sizemsg').textContent = '';
   cur = 0; colour = Math.min(1, palette.length - 1); renderAll();
 };
 
 $('load-template').onclick = () => {
   sel = null; pushUndo();
-  frames = [{ hold: 300, grid: TEMPLATE.map(row =>
-    [...row].map(cell)) }];
+  // TEMPLATE is 20x20 art. At 40x40 it is grown instead of refused, so the pose
+  // is still available as a starting point when working at the finer size.
+  let g = TEMPLATE.map(row => [...row].map(cell));
+  while (g.length < N) g = upscale(g);
+  frames = [{ hold: 300, grid: g }];
   cur = 0; renderAll();
+};
+
+// Changing the size rewrites every frame, so it goes through undo like any
+// other edit. The message says which way it went, because growing is free and
+// shrinking is not.
+$('gridsize').onchange = () => {
+  const want = +$('gridsize').value;
+  if (want === N) return;
+  pushUndo();
+  const grew = want > N;
+  setGridSize(want);
+  $('sizemsg').innerHTML = `<span class="${grew ? 'ok' : 'warn'}">${t(grew ? 'sizeUp' : 'sizeDown')}</span>`;
+  renderAll();
 };
 $('clear').onclick = () => { sel = null; pushUndo(); frames = [{hold:300, grid:blank()}]; cur = 0; renderAll(); };
 
@@ -1107,8 +1250,13 @@ $('import').onclick = () => {
   try {
     if (Array.isArray(d.cells) && d.dict) {
       // makebead: one frame, dict + flat cells with nulls
-      if (d.size && (d.size[0] !== N || d.size[1] !== N))
-        throw new Error(t('canvasSize', {w: d.size[0], h: d.size[1], n: N}));
+      if (d.size) {
+        // Still has to be square — a 20x40 canvas is not a grid size, it is a
+        // different shape, and nothing downstream could render it.
+        if (d.size[0] !== d.size[1])
+          throw new Error(t('canvasSize', {w: d.size[0], h: d.size[1], n: N}));
+        adoptGridSize(d.size[0]);
+      }
       const map = new Map(); palette = ['transparent'];
       const g = blank();
       for (let i = 0; i < N*N; i++) {
@@ -1120,7 +1268,13 @@ $('import').onclick = () => {
       }
       frames = [{ hold: 200, grid: g }];
     } else if (Array.isArray(d.frames) && Array.isArray(d.palette)) {
-      // claudepix schema
+      // claudepix schema — the frames carry their own side, so read it off
+      // frame 0 the same way convert_to_c.js does, and require the rest to
+      // agree. A mixed-size set would be indexed at one stride on the device.
+      const side = d.frames[0].grid.length;
+      if (d.frames.some(f => f.grid.length !== side || f.grid.some(r => r.length !== side)))
+        throw new Error(t('canvasSize', {w: side, h: side, n: N}));
+      adoptGridSize(side);
       palette = [...d.palette];
       frames = d.frames.map(f => ({ hold: f.hold || 200, grid: f.grid.map(r => [...r]) }));
       if (d.name) $('name').value = d.name;
@@ -1163,7 +1317,7 @@ $('copy').onclick = async () => {
 // ── go ───────────────────────────────────────────────────────────────────────
 function renderAll() {
   paintGrid(); renderFrames(); renderPalette();
-  if (!playing) { paintPreview($('pv-splash'), 24, cur); paintPreview($('pv-badge'), 4, cur); }
+  if (!playing) { paintPreview($('pv-splash'), cur); paintPreview($('pv-badge'), cur); }
 }
 // ── tab icon ─────────────────────────────────────────────────────────────────
 // Drawn from TEMPLATE at load rather than shipped as a file, so the editor
@@ -1177,9 +1331,13 @@ function renderAll() {
 // behind them is black. Left transparent, they'd vanish into a dark tab bar
 // and he'd be a featureless blob.
 function buildFavicon() {
+  // TEMPLATE's own side, not N: the icon is drawn from the template once at
+  // load and never redrawn, so it must not depend on the size the canvas is
+  // switched to later.
   const g = TEMPLATE.map(row => [...row].map(cell));
-  let r0 = N, c0 = N, r1 = -1, c1 = -1;
-  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+  const T = g.length;
+  let r0 = T, c0 = T, r1 = -1, c1 = -1;
+  for (let r = 0; r < T; r++) for (let c = 0; c < T; c++) {
     if (!g[r][c]) continue;
     if (r < r0) r0 = r; if (r > r1) r1 = r;
     if (c < c0) c0 = c; if (c > c1) c1 = c;
@@ -1231,6 +1389,7 @@ function applyLang(next) {
   $('copy').textContent = t('copyClip');
   $('lang').value = lang;
   describeSample();
+  syncSizeUI();     // the preview captions carry a number, so they aren't data-i18n
   renderAll();
 
   try { localStorage.setItem('clawdmeter-lang', lang); } catch {}
