@@ -2,8 +2,36 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Clawdmeter 動畫編輯器</title>
 <link id="favicon" rel="icon" href="data:,">
+
+<!-- Link preview. The URLs have to be absolute — a scraper has no page to
+     resolve a relative path against — which makes them specific to where this
+     is published. They point at the GitHub Pages copy of this fork; if this
+     file is ever taken upstream, they are the thing to change.
+
+     The card text is English to match the image, which is English. The page
+     itself picks its language from the browser, but a scraper reads this once
+     and shows the same card to everyone.
+
+     og:image is a WebP. Facebook, X, Slack and Discord all render it; LinkedIn
+     is the one that has historically not. Swap in a JPEG if a card ever comes
+     out blank there. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Clawdmeter">
+<meta property="og:title" content="Clawdmeter animation editor">
+<meta property="og:description" content="Draw 20×20 and 40×40 pixel-art animations for the Clawdmeter splash screen. On-device previews on black, 20+ loadable samples, exports JSON the firmware converter reads. Runs entirely in the browser.">
+<meta property="og:url" content="https://tb1982.github.io/Clawdmeter/tools/anim_editor.html">
+<meta property="og:image" content="https://tb1982.github.io/Clawdmeter/assets/og-anim-editor.webp">
+<meta property="og:image:type" content="image/webp">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Clawdmeter animation editor: a 20×20 pixel grid with a fireworks animation over Clawd, beside the animation's palette and four corner-badge previews.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Clawdmeter animation editor">
+<meta name="twitter:description" content="Draw 20×20 and 40×40 pixel-art animations for the Clawdmeter splash screen. Runs entirely in the browser.">
+<meta name="twitter:image" content="https://tb1982.github.io/Clawdmeter/assets/og-anim-editor.webp">
 <style>
   :root {
     --bg: #14120f; --panel: #1e1b17; --line: #3a352e;
