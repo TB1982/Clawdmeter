@@ -122,6 +122,11 @@ Device path differs by OS: `/dev/cu.usbmodem*` on macOS, `/dev/ttyACM0` on Linux
 
 The firmware ships a `screenshot` serial command that dumps the LVGL framebuffer. `./screenshot.sh out.png [port]` captures a PNG sized to the active display (480×480 or 368×448). **Use this on every UI iteration** — Read the PNG with the Read tool, verify the change visually, iterate. Script auto-picks the macOS/Linux default port and falls back to pio's bundled Python if pyserial isn't on the system Python.
 
+Other serial commands, both there so a state that normally needs waiting can be
+triggered on demand: `buzz` fires the reset chime, `party` fires the reset
+celebration (30s of `dance djmix` on the splash and the corner badge). Without
+`party` you'd have to wait out a real 5-hour window refill to see it.
+
 The boot screen is `SCREEN_SPLASH` and only advances on a physical button press, so a fresh flash will sit on the splash. To screenshot the screen you're actually editing without asking the user to press a button, **temporarily change the default boot screen** in `main.cpp` (search for `ui_show_screen(SCREEN_SPLASH);`) to `SCREEN_USAGE` / `SCREEN_CONTROLLER` / `SCREEN_BLUETOOTH`, do your iteration, then revert before committing.
 
 ## Critical gotchas
@@ -143,15 +148,88 @@ The boot screen is `SCREEN_SPLASH` and only advances on a physical button press,
 
 ## Splash animations
 
-13 × 20×20 pixel-art creature animations sourced from
-[claudepix.vercel.app](https://claudepix.vercel.app). Pipeline:
+16 × 20×20 pixel-art creature animations: 13 scraped from
+[claudepix.vercel.app](https://claudepix.vercel.app) plus 3 composed locally.
+Pipeline:
 
 ```bash
-node tools/scrape_claudepix.js  # → tools/claudepix_data/*.json
-node tools/convert_to_c.js      # → firmware/src/splash_animations.h
+node tools/scrape_claudepix.js   # → tools/claudepix_data/*.json   (scraped; wiped and rewritten)
+node tools/make_custom_anims.js  # → tools/custom_anims/*.json     (composed; also wiped and rewritten)
+node tools/convert_to_c.js       # both dirs → firmware/src/splash_animations.h
 ```
 
-Each animation has a per-animation 10-color RGB565 palette. Cell values 0..9 index it. Default boot screen.
+Each animation has a per-animation 16-color RGB565 palette. Cell values 0..15
+index it. Default boot screen. The cap lives in one constant per side —
+`PALETTE_SIZE` in `convert_to_c.js` (which emits the firmware's
+`SPLASH_PALETTE_SIZE`) and `PALETTE_MAX` in `anim_editor.html`; nothing in
+`splash.cpp` hardcodes it. It was 10 until 2026-08-08. Raising it again means
+checking the packed sample strings in `build_editor_samples.js`: they store one
+base-36 character per cell, so the ceiling there is 36.
+
+**The two source dirs are separate on purpose** — the scraper owns
+`claudepix_data/` and is free to wipe it, so anything hand-made there would be
+lost on the next re-scrape. `convert_to_c.js` reads a comma-separated `--in`
+list and defaults to both.
+
+`make_custom_anims.js` does **not** draw characters. Each output takes a
+claudepix animation as its base and overlays props that track the creature
+frame by frame (it locates his head per frame, so headphones ride a bounce
+instead of being pinned to fixed coordinates). Current outputs: `fm listening`
+(headphones + drifting notes over `dance_bounce`), `idle hearts` and
+`idle blossom` (over `idle_breathe`). Run it with `--preview <prefix>` to get a
+contact sheet PNG per animation — the only way to judge these without hardware,
+and worth doing first every time. Two things learned the hard way: props must
+be **light** (the panel background is black, so a dark prop is invisible), and
+a 3×3 heart is **not legible** — its two top humps read as antennae, so the
+heart is 5×3 and beats via brightness rather than by resizing.
+
+`tools/grid_image_to_anim.js` takes hand-drawn frames instead: one image per
+frame, a 20×20 grid with cells coloured in, however it was drawn (spreadsheet,
+pixel editor, screenshot, photo).
+
+```bash
+node tools/grid_image_to_anim.js --name "my anim" --holds 300,120,300,120 frames/*.png
+```
+
+Each cell is sampled from the middle of its area, so gridlines and cell borders
+are ignored, and the grid area is auto-detected (uniform borders are trimmed;
+`--crop x0,y0,x1,y1` overrides). Images whose dimensions are an exact multiple
+of 20 are treated as already-cropped, since trimming a pixel-editor export
+would shift every cell — its empty background *is* content. It always prints
+the grid it read as text: check that against the drawing, because a half-cell
+offset yields a plausible-looking grid that's wrong everywhere. Round-trips
+exactly (0/400 cells differing) on both a 20×20 export and a 514×514 grid with
+gridlines and a page margin.
+
+`tools/anim_editor.html` is the drawing surface — open it straight off disk, no
+server. It carries what the firmware cares about rather than what a general
+pixel editor offers: 20×20 and the 16-colour cap enforced, per-frame hold
+times, onion skin, playback at the real holds, and both device previews on
+black (24px/cell splash, 4px/cell corner badge). A colour that looks fine on
+white can vanish on the panel and a shape that reads at 24px can turn to mush
+at 4px, so previewing at both scales is the point. Selection lifts on first
+move — arrow-key a selection a cell at a time and that's one frame of motion.
+
+Two things exist because of the coffee mug in `work think`. The onion skin is
+drawn *under* the current frame, so anywhere the two overlap it's hidden — and a
+prop held against the body is exactly the case that gets covered, leaving no
+reference for the thing you're positioning. Cells that changed and are covered
+get a dot on top in the previous frame's colour. And the clipboard (複製 in the
+selection bar / Cmd-C, then 貼上 / Cmd-V) survives a frame change, so a prop is
+drawn once and pasted-then-nudged down the timeline instead of hand-redrawn 30
+times, slightly different each time.
+
+Every animation in the catalog is embedded as a loadable sample, so an existing
+one can be opened and fixed rather than rebuilt; load → export round-trips
+byte-identically. Re-run `node tools/build_editor_samples.js` after changing
+any animation — it rewrites only the region between the `BEGIN-SAMPLES` /
+`END-SAMPLES` markers, and the rest of the editor is hand-written. The data is
+inlined rather than fetched because the editor runs from `file://`, where
+fetching a sibling file is blocked.
+
+Animations reach the screen through the rate groups in `splash.cpp`
+(`GROUP_NAMES`), matched by literal name — adding a JSON is not enough, the
+name has to be listed in a group or nothing will ever pick it.
 
 ## User profile / preferences
 
