@@ -91,6 +91,7 @@ becomes common, not worth faking with an overlay.
 ```bash
 node preview_anim.js "work think"     # by name, or by path to a .json
 node preview_anim.js --all            # the whole catalogue
+node preview_anim.js "idle blink" --rhythm    # per-frame change table
 ```
 
 Writes a contact sheet per animation to `tools/preview/` (gitignored) with both
@@ -102,6 +103,14 @@ Both scales, because they fail differently and neither failure is visible from
 the other. The editor shows the same pair for the same reason; this is that check
 without opening a browser, which is what makes it usable from a script or by an
 agent that would otherwise have to ask a human to go and look.
+
+It also counts what changes between frames. A frame byte-identical to the one
+before it is indistinguishable by eye from a deliberate pause, and the sheet will
+never show you the difference — but merging it into its predecessor's hold plays
+identically, because the render loop is *hold expires → advance → render* with
+nothing keyed to the frame index. **26 of the catalogue's 327 frames are
+redundant that way**, 10.4 KB of flash holding pictures the device already has.
+Whether to spend that is a judgement; not knowing isn't.
 
 ## 2c. Have Claude draw one
 
