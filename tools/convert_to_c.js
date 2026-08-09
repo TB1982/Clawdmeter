@@ -61,6 +61,12 @@ const EXCLUDE = new Set([
   // the slowest loop in the busiest band, with 53% of its motion being sparkles
   // in empty space rather than anything happening to him.
   'dance sway dj',
+  // The last of the three DJ animations to go, retired 2026-08-10 when "this is
+  // fine" took its slot. Nova had wanted it gone for a while and the reason
+  // turned out to be the same one that sank its sway variant: it floats. What
+  // she kept liking about "dance djmix" was that he stands at a desk, and the
+  // two bounce/sway variants have him in mid-air with nothing under him.
+  'dance bounce dj',
   // Freed once ui.cpp's idle screen stopped naming it: that screen draws one
   // animation directly rather than picking from a rate group, so anything it
   // names has to stay in the build no matter what the groups say.

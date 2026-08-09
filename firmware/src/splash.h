@@ -39,11 +39,12 @@ bool splash_is_active(void);
 // Root container (so ui.cpp can attach a click event).
 lv_obj_t* splash_get_root(void);
 
-// Mini animated creature for embedding elsewhere (the idle "Zzz" panel, the
-// corner badge on the usage screen). Each instance owns its canvas, buffer and
-// frame clock, so several can run at once.
+// Mini animated creature for embedding elsewhere (the waiting-for-data panel on
+// the usage screen, the corner badge on it). Each instance owns its canvas,
+// buffer and frame clock, so several can run at once.
 //
-// `anim_name` picks a claudepix animation by name (e.g. "expression sleep");
+// `anim_name` picks an animation by name (e.g. "idle look around", which is
+// what the waiting panel asks for — the only literal name outside splash.cpp);
 // pass NULL to follow the live usage-rate group instead, re-picking on the same
 // cadence as the full-screen splash. Renders at ~px×px inside `parent`.
 // Returns NULL if the animation isn't found or allocation fails.

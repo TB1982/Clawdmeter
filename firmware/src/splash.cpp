@@ -74,11 +74,10 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // back to back — the rubber ring, then the fireworks — and "space" closes
     // the round because he gives the OK in "expression wink" and then flies
     // off, which restarts with him home again in the hearts.
-    // Trimmed 2026-08-09 from nine to seven: "idle breathe" and "idle blink"
-    // are gone from the build entirely (see EXCLUDE in convert_to_c.js), and
-    // "expression sleep" is still compiled in because the idle screen draws it
-    // directly in ui.cpp, but nothing picks it here any more — which is why the
-    // run no longer ends on him asleep. "space" took it back to eight.
+    // Trimmed 2026-08-09 from nine to seven: "idle breathe", "idle blink" and
+    // "expression sleep" are gone from the build entirely (see EXCLUDE in
+    // convert_to_c.js), which is why the run no longer ends on him asleep.
+    // "space" took it back to eight.
     { "idle hearts", "swim summer", "hanabi", "rainy days", "idle blossom",
       "fm listening", "expression wink", "space", NULL },
     // Group 1 — normal pace. "work type" is deliberately absent: it exists in
@@ -86,6 +85,9 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // twitch, no keyboard and no surface — there is nothing in it to read as
     // typing. It's one of the two animations the claudepix site never lists,
     // which is probably the same judgement. "work out" takes its slot.
+    // "idle look around" is the one name here that is not free to leave: the
+    // usage screen hands it to splash_mini_create() by literal string, so
+    // EXCLUDE-ing it would leave that corner blank whatever the groups say.
     { "idle look around", "work think", "work coding", "work out" },
     // Group 2 — active. "dance bob" is absent for the same reason work type is:
     // four frames, the other of the two the claudepix site never lists. It's
@@ -101,7 +103,12 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // It retired "dance sway dj", the weakest of the three by measurement —
     // slowest loop in the busiest group, and 53% of its motion was sparkles in
     // empty space rather than anything happening to him.
-    { "surfing", "dance bounce dj", "dance djmix", NULL },
+    // "this is fine" retired "dance bounce dj" on 2026-08-10 and finishes the
+    // thought: the three left are a wave carrying him, a room burning around
+    // him, and a desk he is standing at. All three have something under him.
+    // The two DJ animations that went had him in mid-air, which is what Nova
+    // could see was wrong about them long before any of us could say why.
+    { "surfing", "this is fine", "dance djmix", NULL },
 };
 
 static bool groups_resolved = false;
