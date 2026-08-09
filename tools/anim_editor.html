@@ -109,6 +109,14 @@
   /* The heading is uppercased; a unit inside it must not be. "2,700 MS" reads
      as a different word. */
   .panel h2 #timing { text-transform: none; letter-spacing: 0; }
+  /* Tighter padding than the panels, but the same 11px as the rest of the
+     small print. Shrinking it to 10px was tried to win back a scrollbar and
+     did not: English runs ~90px taller than Chinese here, so no type size
+     makes this fit every window in every language. Readability of a notice
+     that has to be readable beats a fit that was never reliable. */
+  footer { margin: 14px 0 0; padding: 10px 14px; background: var(--panel);
+           border: 1px solid var(--line); color: var(--dim);
+           font-size: 11px; line-height: 1.6; }
   #timingbox { font-size: 11px; color: var(--dim); line-height: 1.7; margin-top: 10px; }
   #timingbox b { color: var(--text); font-weight: 600; }
   #timingbox .cand { color: var(--text); white-space: nowrap; margin-right: 14px; }
@@ -229,23 +237,6 @@
             <button id="load-template" data-i18n="loadPose">載入 Clawd 樣板</button>
             <button id="clear" data-i18n="clearAll">清空</button>
           </div>
-          <!-- Whoever opens this sees 18 animations and no indication of whose they
-               are. Most of the catalogue is someone else's work, and the editor is
-               the one place in the repo where you meet it without the README.
-               The second half says why they are bundled at all: an empty grid is
-               where a beginner gives up, so the samples are the ramp. Saying that
-               out loud is the difference between a teaching aid and a helping of
-               someone else's art served without asking. -->
-          <p class="sub" style="margin:10px 0 0;font-size:11px;line-height:1.5"
-             data-i18n-html="credit">
-            大部分的動畫來自
-            <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a>，
-            作者 <a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a>。
-            角色 Clawd 是 Anthropic 的資產。改作前請先確認自己的用途沒問題。
-            樣本之所以內嵌，是因為沒有 pixel art 經驗的人面對一格空白幾乎無從下手——
-            它們是拿來臨摹、拆解、改著玩的起點，不是被當成我們自己的作品重新發佈。
-            任一方若不希望它們留在這裡，開個 issue 說一聲就會移除。
-          </p>
           <div class="row" style="margin-top:8px">
             <textarea id="importbox" data-i18n-ph="importPh" placeholder="貼上動畫 JSON，然後按下面的匯入"></textarea>
           </div>
@@ -360,6 +351,18 @@
         </div>
   </div>
 </div>
+
+<!-- Whoever opens this sees two dozen animations and no indication of whose
+     they are. Most of the catalogue is someone else's work, and the editor is
+     the one place in the repo where you meet it without the README. The second
+     half says why they are bundled at all: an empty grid is where a beginner
+     gives up, so the samples are the ramp. Saying that out loud is the
+     difference between a teaching aid and a helping of someone else's art
+     served without asking.
+     Full width along the bottom rather than inside a panel: it belongs to the
+     whole page, and it is long enough that putting it in a 300px column made
+     that column tall enough to give the page a scrollbar on its own. -->
+<footer data-i18n-html="credit"></footer>
 
 <script>
 // ── model ────────────────────────────────────────────────────────────────────
