@@ -114,6 +114,19 @@ static void resolve_group_lists(void) {
     }
 }
 
+// ---- Opening: played once, the first time the splash is shown after boot. ----
+//
+// Deliberately not a rate group member and deliberately not reachable from
+// splash_next(), so "only at boot" means what it says: nothing picks it, nothing
+// cycles onto it, and the flag below is only ever true once per power-up.
+//
+// It plays straight through rather than looping. Everything else in the
+// catalogue loops forever and is chosen for what it says about the current usage
+// rate; this one has a beginning and an end and says hello.
+#define SPLASH_OPENING_ANIM "opening"
+static bool opening_pending = true;   // static init: true exactly once per boot
+static bool cur_is_opening = false;
+
 // ---- Celebration: a short override that outranks the rate groups. ----
 #define SPLASH_CELEBRATE_MS   30000
 #define SPLASH_CELEBRATE_ANIM "dance djmix"
@@ -530,6 +543,26 @@ void splash_tick(void) {
     }
 #endif
 
+    // The opening runs once and does not loop: at the end of its last frame it
+    // hands over to the rate groups and is never selected again. Handled before
+    // the rotation logic and returning early, so the 20 s rotate timer cannot
+    // cut it short.
+    if (cur_is_opening) {
+        const splash_anim_def_t *o = &splash_anims[cur_anim];
+        if (millis() - frame_started_ms >= o->holds[cur_frame]) {
+            if (cur_frame + 1 >= o->frame_count) {
+                cur_is_opening = false;
+                opening_pending = false;
+                splash_pick_for_current_rate();
+            } else {
+                cur_frame++;
+                frame_started_ms = millis();
+                render_frame(o, cur_frame);
+            }
+        }
+        return;
+    }
+
     // Auto-rotate within the current group. A celebration plays through
     // uninterrupted — no rotation while it runs — and both its start and its
     // end force an immediate re-pick so the switch isn't held up to 20s.
@@ -552,7 +585,15 @@ void splash_tick(void) {
 
 void splash_next(void) {
     if (SPLASH_ANIM_COUNT == 0) return;
-    cur_anim = (cur_anim + 1) % SPLASH_ANIM_COUNT;
+    // A press means "show me something else", so it also ends the opening — and
+    // the cycle skips over it, or the one animation that is supposed to be
+    // boot-only would be two presses away for the rest of the session.
+    cur_is_opening = false;
+    opening_pending = false;
+    const splash_anim_def_t *opening = find_anim(SPLASH_OPENING_ANIM);
+    do {
+        cur_anim = (cur_anim + 1) % SPLASH_ANIM_COUNT;
+    } while (opening && &splash_anims[cur_anim] == opening && SPLASH_ANIM_COUNT > 1);
     cur_frame = 0;
     frame_started_ms = millis();
     last_pick_ms = frame_started_ms;
@@ -575,10 +616,31 @@ void splash_pick_for_current_rate(void) {
     render_frame(a, 0);
 }
 
+// Start the opening if this is the first show since boot and the animation is
+// actually in the build. Returns false if it isn't, so the caller falls back to
+// a normal pick rather than showing nothing — excluding or renaming "opening"
+// must not leave a blank screen.
+static bool splash_start_opening(void) {
+    if (!opening_pending) return false;
+    const splash_anim_def_t *a = find_anim(SPLASH_OPENING_ANIM);
+    if (!a) { opening_pending = false; return false; }
+
+    cur_anim = (uint16_t)(a - splash_anims);
+    cur_frame = 0;
+    frame_started_ms = millis();
+    last_pick_ms = frame_started_ms;
+    cur_is_opening = true;
+    cur_is_celebration = false;
+    render_frame(a, 0);
+    Serial.printf("splash: opening (%u frames)\n", a->frame_count);
+    return true;
+}
+
 bool splash_is_active(void) { return active; }
 
 void splash_show(void) {
-    splash_pick_for_current_rate();   // select animation; direct path defers the draw
+    // select animation; direct path defers the draw
+    if (!splash_start_opening()) splash_pick_for_current_rate();
     if (splash_container) lv_obj_clear_flag(splash_container, LV_OBJ_FLAG_HIDDEN);
     active = true;
 #if SPLASH_DIRECT_DRAW
