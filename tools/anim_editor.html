@@ -1678,7 +1678,37 @@ function applyLang(next) {
 })();
 
 buildFavicon();
-$('load-template').click();
+
+// Open on an animation rather than on the bare template. The template is one
+// still pose: it shows what the canvas is, not what the tool is for. `hanabi`
+// arrives already moving, with 22 frames, a fireworks palette and uneven holds,
+// so the frame strip, the playback and both device previews all have something
+// in them the moment the page loads.
+//
+// This is exactly what pressing 載入 on hanabi does, name and category
+// included — so the same caution applies as to any sample: drawing over it and
+// exporting writes hanabi.json. Falls back to the template if the samples were
+// never generated or hanabi has left the catalogue.
+(function openingSample() {
+  const i = SAMPLES.findIndex(a => a.n === 'hanabi');
+  if (i < 0) { $('load-template').click(); return; }
+  $('sample').value = i;
+  describeSample();
+  $('load-sample').click();
+
+  // Land on the fullest frame rather than the first. hanabi opens on a rocket
+  // that is one white speck against black — accurate to the animation and a
+  // poor first thing to see. Its widest burst fills both device previews and
+  // the canvas at once. Computed rather than written down, so editing hanabi
+  // cannot leave this pointing at a frame that stopped being the peak.
+  let best = 0, most = -1;
+  frames.forEach((f, k) => {
+    const fill = f.grid.reduce((s, row) => s + row.filter(Boolean).length, 0);
+    if (fill > most) { most = fill; best = k; }
+  });
+  cur = best; renderAll();
+})();
+
 undoStack = [];
 </script>
 </body>
