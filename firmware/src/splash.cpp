@@ -68,17 +68,19 @@ static uint8_t group_rotation[GROUP_COUNT] = {0};
 
 static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // Group 0 — idle / sleepy. Order is playback order: pick_rate_anim() walks
-    // the list one entry every SPLASH_ROTATE_INTERVAL_MS, so slot 0 is also
-    // what you meet at boot. Nova's arrangement runs from the most expressive
-    // down to the quietest and ends on him asleep, which loops back round to
-    // the hearts. "hanabi" follows "swim summer" so the two summer scenes play
-    // back to back — the rubber ring, then the fireworks.
-    // Trimmed 2026-08-09 from nine to six. "idle breathe" and "idle blink" are
-    // gone from the build entirely (see EXCLUDE in convert_to_c.js); "expression
-    // sleep" is still compiled in because the idle screen draws it directly in
-    // ui.cpp, but nothing picks it here any more.
+    // the list one entry every SPLASH_ROTATE_INTERVAL_MS, so slot 0 is what you
+    // meet at boot and the last slot is what loops back into it. Pairs are
+    // deliberate: "hanabi" follows "swim summer" so the two summer scenes play
+    // back to back — the rubber ring, then the fireworks — and "space" closes
+    // the round because he gives the OK in "expression wink" and then flies
+    // off, which restarts with him home again in the hearts.
+    // Trimmed 2026-08-09 from nine to seven: "idle breathe" and "idle blink"
+    // are gone from the build entirely (see EXCLUDE in convert_to_c.js), and
+    // "expression sleep" is still compiled in because the idle screen draws it
+    // directly in ui.cpp, but nothing picks it here any more — which is why the
+    // run no longer ends on him asleep. "space" took it back to eight.
     { "idle hearts", "swim summer", "hanabi", "rainy days", "idle blossom",
-      "fm listening", "expression wink", NULL, NULL },
+      "fm listening", "expression wink", "space", NULL },
     // Group 1 — normal pace. "work type" is deliberately absent: it exists in
     // splash_anims[] but nothing picks it. Four frames, four pixels of arm
     // twitch, no keyboard and no surface — there is nothing in it to read as
@@ -622,6 +624,15 @@ void splash_pick_for_current_rate(void) {
     last_pick_ms = frame_started_ms;
     const splash_anim_def_t *a = &splash_anims[cur_anim];
     render_frame(a, 0);
+    // Log the group path too, not just splash_next(). An animation that is in
+    // splash_anims[] but missing from GROUP_NAMES renders perfectly when you
+    // cycle to it by hand and is never once picked on its own, and without this
+    // line the two cases look identical from outside the box. The group number
+    // is here because the name alone doesn't tell you which list it came from.
+    // Reading the output: USB-CDC holds a short line until the next write, so
+    // these arrive in pairs 40 s apart rather than singly every 20 s. The picks
+    // themselves are on time — don't go hunting for a double-advance bug.
+    Serial.printf("splash: [g%d] -> %s\n", usage_rate_group(), a->name);
 }
 
 // Start the opening if this is the first show since boot and the animation is
