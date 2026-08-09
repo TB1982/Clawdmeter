@@ -89,7 +89,10 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // four frames, the other of the two the claudepix site never lists. It's
     // been redrawn past recognition as "swim summer", which sits in the idle
     // group instead — floating in a rubber ring is not an active state.
-    { "dance sway", "expression surprise", "dance bounce" },
+    // "work mode" retired "dance sway" here on 2026-08-09; it is the one
+    // animation built to fill a whole slot in a single pass, so its walk-in
+    // plays once instead of three times and is never cut part-way.
+    { "work mode", "expression surprise", "dance bounce" },
     // Group 3 — heavy
     { "dance bounce dj", "dance sway dj", "dance djmix", NULL },
 };
