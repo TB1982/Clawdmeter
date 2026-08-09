@@ -73,8 +73,12 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // down to the quietest and ends on him asleep, which loops back round to
     // the hearts. "hanabi" follows "swim summer" so the two summer scenes play
     // back to back — the rubber ring, then the fireworks.
+    // Trimmed 2026-08-09 from nine to six. "idle breathe" and "idle blink" are
+    // gone from the build entirely (see EXCLUDE in convert_to_c.js); "expression
+    // sleep" is still compiled in because the idle screen draws it directly in
+    // ui.cpp, but nothing picks it here any more.
     { "idle hearts", "swim summer", "hanabi", "idle blossom", "fm listening",
-      "expression wink", "idle breathe", "idle blink", "expression sleep" },
+      "expression wink", NULL, NULL, NULL },
     // Group 1 — normal pace. "work type" is deliberately absent: it exists in
     // splash_anims[] but nothing picks it. Four frames, four pixels of arm
     // twitch, no keyboard and no surface — there is nothing in it to read as
