@@ -109,6 +109,13 @@
   /* The heading is uppercased; a unit inside it must not be. "2,700 MS" reads
      as a different word. */
   .panel h2 #timing { text-transform: none; letter-spacing: 0; }
+  #timingbox { font-size: 11px; color: var(--dim); line-height: 1.7; margin-top: 10px; }
+  #timingbox b { color: var(--text); font-weight: 600; }
+  #timingbox .cand { color: var(--text); white-space: nowrap; margin-right: 14px; }
+  #timingbox .cut { color: #ffb454; }
+  /* The frame the slot expires on, marked in the strip as well as named below
+     the canvas — counting to a frame number from a percentage is work. */
+  .fnum .cut { color: #ffb454; }
   button, select, input {
     font: inherit; background: #2a2620; color: var(--text);
     border: 1px solid var(--line); padding: 4px 9px; cursor: pointer;
@@ -256,6 +263,11 @@
             再把名稱加進 <code>splash.cpp</code> 的分組清單。
           </p>
         </div>
+
+    <div class="panel">
+          <h2 data-i18n="refsH">規範與筆記</h2>
+          <p class="sub" style="margin:0;font-size:11px" data-i18n-html="refsBody"></p>
+        </div>
   </div>
 
   <div class="col-art">
@@ -283,6 +295,11 @@
           </div>
         </div>
     <canvas id="grid" width="480" height="480"></canvas>
+    <!-- Under the canvas on purpose. This block lived under the frame strip
+         first, where it pushed the frame buttons below the fold — and stepping
+         through frames with those buttons is how you judge whether motion
+         reads. Explanation must not sit on the path to the control it explains. -->
+    <div class="panel" id="timingbox"></div>
   </div>
 
   <div class="col-pv">
@@ -356,6 +373,14 @@ const PALETTE_MAX = 16;
 // carries the meaning (a finale, a landed pose) wants a whole number here.
 const SLOT_MS = 20000;
 
+// The two documents the spec panel points at. They live in the repo rather than
+// being restated here, because a copy of a rule on a web page is a copy that
+// goes stale silently — and one of the rules it would be restating is that
+// things which fail silently are the expensive kind.
+const REPO = 'https://github.com/TB1982/Clawdmeter/blob/nova';
+const SKILL_URL = REPO + '/.claude/skills/clawdmeter-animation/SKILL.md';
+const KM_URL = REPO + '/docs/animation-craft.md';
+
 // The grid side is a property of the animation, not of the editor. Keep this in
 // step with GRID_SIZES in tools/convert_to_c.js, which reads the side off frame
 // 0 and rejects anything else.
@@ -397,6 +422,20 @@ const I18N = {
   framesH: '影格', frameHint: '沒有選取範圍時，← → 可以快速切換影格',
   timingSum: '{ms} ms · {loops} 輪',
   timingTitle: '一支動畫在畫面上停留 {slot} 秒，這是總長與這段時間裡跑的輪數',
+  timingLong: '{n} 格 · 總長 {ms} ms · 裝置給一支動畫 {slot} 秒，這段時間裡它會跑 {loops} 輪',
+  timingClean: '剛好收在整輪 ✓',
+  timingCut: '✂ 第 {f} 格會被切掉 —— 最後一輪只播到 {pct}%',
+  timingCutTitle: '{slot} 秒在這一格用完，下一支動畫接手',
+  timingFix: '想整輪收尾的話，總長要調成：',
+  timingCand: '{n} 輪＝{ms} ms（{delta}）',
+  refsH: '規範與筆記',
+  refsBody: '<b>格式規範</b>（<a href="{skillUrl}" target="_blank" rel="noopener">SKILL.md</a>）'
+          + '——寫給 Claude Code 的那一份：20×20 或 40×40、最多 {max} 色、每格獨立 hold。'
+          + '兩個會靜默失敗的坑：<b>同名會覆蓋掉另一支動畫</b>，'
+          + '<b>沒寫進 <code>splash.cpp</code> 分組清單的名字永遠不會被挑到</b>。'
+          + '<br><br><b>手感筆記</b>（<a href="{kmUrl}" target="_blank" rel="noopener">animation-craft.md</a>）'
+          + '——畫下來才知道的：黑底會吃掉暗色 · 4px 徽章只讀得出密度和顏色，讀不出形狀 · '
+          + '形狀可以被裁切 · 什麼都不能浮空。',
   frameAdd: '+ 新增', frameDup: '複製本格', frameDel: '刪除',
   frameLeft: '← 前移', frameRight: '後移 →',
   infoH: '動畫資訊', labelName: '名稱', labelCat: '分類', labelSize: '尺寸',
@@ -444,6 +483,20 @@ const I18N = {
   framesH: 'Frames', frameHint: 'With nothing selected, ← → step through frames',
   timingSum: '{ms} ms · {loops}×',
   timingTitle: 'An animation holds the screen for {slot} s — this is the loop length and how many times it runs in that time',
+  timingLong: '{n} frames · {ms} ms total · the device gives an animation {slot} s, and it runs {loops} times in that',
+  timingClean: 'Ends on a whole loop ✓',
+  timingCut: '✂ frame {f} is where it gets cut — the last loop only reaches {pct}%',
+  timingCutTitle: "The {slot} s slot runs out on this frame and the next animation takes over",
+  timingFix: 'To end on a whole loop, make the total:',
+  timingCand: '{n}× = {ms} ms ({delta})',
+  refsH: 'Spec and notes',
+  refsBody: '<b>Format spec</b> (<a href="{skillUrl}" target="_blank" rel="noopener">SKILL.md</a>)'
+          + ' — the one written for Claude Code: 20×20 or 40×40, at most {max} colours, a hold per frame.'
+          + ' Two traps that fail silently: <b>a duplicate name replaces another animation</b>, and'
+          + ' <b>a name absent from the group lists in <code>splash.cpp</code> is never picked</b>.'
+          + '<br><br><b>Craft notes</b> (<a href="{kmUrl}" target="_blank" rel="noopener">animation-craft.md</a>)'
+          + ' — what drawing them taught us: black eats dark colours · at 4 px the badge reads density'
+          + ' and colour, never shape · a shape may be cut · nothing floats.',
   frameAdd: '+ Add', frameDup: 'Duplicate', frameDel: 'Delete',
   frameLeft: '← Move left', frameRight: 'Move right →',
   infoH: 'Animation', labelName: 'Name', labelCat: 'Category', labelSize: 'Size',
@@ -491,6 +544,20 @@ const I18N = {
   framesH: 'コマ', frameHint: '選択範囲がないときは ← → でコマを切り替えられます',
   timingSum: '{ms} ms · {loops} 周',
   timingTitle: '1 本のアニメは {slot} 秒表示されます。合計時間と、その間に回る周回数です',
+  timingLong: '{n} コマ · 合計 {ms} ms · 端末は 1 本に {slot} 秒を与えます。その間に {loops} 周します',
+  timingClean: 'ちょうど 1 周の切れ目で終わります ✓',
+  timingCut: '✂ {f} コマ目で切り替わります —— 最後の周は {pct}% まで',
+  timingCutTitle: 'このコマで {slot} 秒が尽きて、次のアニメに切り替わります',
+  timingFix: '周の切れ目で終わらせるなら、合計を：',
+  timingCand: '{n} 周＝{ms} ms（{delta}）',
+  refsH: '仕様とメモ',
+  refsBody: '<b>フォーマット仕様</b>（<a href="{skillUrl}" target="_blank" rel="noopener">SKILL.md</a>）'
+          + '——Claude Code 向けに書いたものです：20×20 か 40×40、最大 {max} 色、コマごとの表示時間。'
+          + '静かに失敗する罠が二つ：<b>同じ名前は別のアニメを上書きします</b>、'
+          + '<b><code>splash.cpp</code> のグループ一覧にない名前は決して選ばれません</b>。'
+          + '<br><br><b>作り方のメモ</b>（<a href="{kmUrl}" target="_blank" rel="noopener">animation-craft.md</a>）'
+          + '——描いて分かったこと：黒背景は暗い色を飲み込む · 4px のバッジは密度と色しか読めず形は読めない · '
+          + '形は切れてよい · 何も宙に浮かせない。',
   frameAdd: '+ 追加', frameDup: 'このコマを複製', frameDel: '削除',
   frameLeft: '← 前へ', frameRight: '後ろへ →',
   infoH: 'アニメーション情報', labelName: '名前', labelCat: '分類', labelSize: 'サイズ',
@@ -538,6 +605,20 @@ const I18N = {
   framesH: '帧', frameHint: '没有选取范围时，← → 可以快速切换帧',
   timingSum: '{ms} ms · {loops} 轮',
   timingTitle: '一支动画在画面上停留 {slot} 秒，这是总长与这段时间里跑的轮数',
+  timingLong: '{n} 帧 · 总长 {ms} ms · 设备给一支动画 {slot} 秒，这段时间里它会跑 {loops} 轮',
+  timingClean: '刚好收在整轮 ✓',
+  timingCut: '✂ 第 {f} 帧会被切掉 —— 最后一轮只播到 {pct}%',
+  timingCutTitle: '{slot} 秒在这一帧用完，下一支动画接手',
+  timingFix: '想整轮收尾的话，总长要调成：',
+  timingCand: '{n} 轮＝{ms} ms（{delta}）',
+  refsH: '规范与笔记',
+  refsBody: '<b>格式规范</b>（<a href="{skillUrl}" target="_blank" rel="noopener">SKILL.md</a>）'
+          + '——写给 Claude Code 的那一份：20×20 或 40×40、最多 {max} 色、每帧独立 hold。'
+          + '两个会静默失败的坑：<b>同名会覆盖掉另一支动画</b>，'
+          + '<b>没写进 <code>splash.cpp</code> 分组清单的名字永远不会被挑到</b>。'
+          + '<br><br><b>手感笔记</b>（<a href="{kmUrl}" target="_blank" rel="noopener">animation-craft.md</a>）'
+          + '——画下来才知道的：黑底会吃掉暗色 · 4px 徽章只读得出密度和颜色，读不出形状 · '
+          + '形状可以被裁切 · 什么都不能浮空。',
   frameAdd: '+ 新增', frameDup: '复制本帧', frameDel: '删除',
   frameLeft: '← 前移', frameRight: '后移 →',
   infoH: '动画信息', labelName: '名称', labelCat: '分类', labelSize: '尺寸',
@@ -588,6 +669,10 @@ function t(key, vars) {
   // {slot} is the rotation interval in whole seconds, substituted globally for
   // the same reason again — it's prose in four languages.
   s = s.split('{slot}').join(SLOT_MS / 1000);
+  // Same again for the two documents the spec panel points at: one link that
+  // rots is better than four copies of it that rot independently.
+  s = s.split('{skillUrl}').join(SKILL_URL);
+  s = s.split('{kmUrl}').join(KM_URL);
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
   return s;
 }
@@ -1115,19 +1200,66 @@ function frameIndexAt(x, y) {
 }
 
 // ── timing ───────────────────────────────────────────────────────────────────
-// The loop length and how many times it runs inside one splash slot. Sits in
-// the Frames heading, where the palette count sits in its own — a number you
-// glance at while editing holds, not a paragraph to read.
-function renderTiming() {
+// Two readouts from one calculation. The bare number sits in the Frames
+// heading, where the palette count sits in its own — something to glance at
+// while editing a hold. The explanation sits under the canvas, deliberately
+// away from the frame buttons.
+//
+// `cutFrame` is where the slot's timer expires: walk the loop from frame 1 and
+// the frame the leftover milliseconds land inside is the one the viewer sees
+// half of before the next animation replaces it. `clean` allows 1% slop at
+// either end — losing the last 20 ms of a 2 s loop is not worth flagging, and
+// flagging it would cry wolf on nearly every animation.
+function timing() {
   const total = frames.reduce((s, f) => s + f.hold, 0);
+  const loops = SLOT_MS / total;
+  const rem = SLOT_MS % total;
+  const frac = rem / total;
+
+  let cutFrame = 0, acc = 0;
+  for (let i = 0; i < frames.length; i++) {
+    acc += frames[i].hold;
+    if (rem < acc) { cutFrame = i; break; }
+  }
+
+  // Loop lengths that would land on a boundary. floor/ceil are the two nearest;
+  // 1 is always offered because filling the whole slot in a single pass is a
+  // thing you may be aiming for even when you are nowhere near it.
+  const cands = [...new Set([1, Math.floor(loops), Math.ceil(loops)])]
+    .filter(n => n >= 1).sort((a, b) => a - b)
+    .map(n => { const target = Math.round(SLOT_MS / n); return {n, target, delta: target - total}; });
+
+  return {total, loops, frac, clean: frac < 0.01 || frac > 0.99, cutFrame, cands};
+}
+
+const fmtMs = n => n.toLocaleString('en-US');
+
+function renderTiming(tm) {
   $('timing').textContent = t('timingSum', {
-    ms: total.toLocaleString('en-US'), loops: (SLOT_MS / total).toFixed(1),
+    ms: fmtMs(tm.total), loops: tm.loops.toFixed(1),
   });
   $('timing').title = t('timingTitle');
+
+  const rows = [t('timingLong', {
+    n: frames.length, ms: `<b>${fmtMs(tm.total)}</b>`, loops: `<b>${tm.loops.toFixed(1)}</b>`,
+  })];
+  if (tm.clean) {
+    rows.push(`<span class="ok">${t('timingClean')}</span>`);
+  } else {
+    rows.push(`<span class="cut">${t('timingCut', {
+      f: tm.cutFrame + 1, pct: Math.round(tm.frac * 100)})}</span>`);
+    const cands = tm.cands.filter(c => c.delta !== 0);
+    if (cands.length) rows.push(t('timingFix') + ' ' + cands.map(c =>
+      `<span class="cand">${t('timingCand', {
+        n: c.n, ms: fmtMs(c.target),
+        delta: (c.delta > 0 ? '+' : '−') + fmtMs(Math.abs(c.delta))})}</span>`).join(''));
+  }
+  $('timingbox').innerHTML = rows.join('<br>');
 }
 
 function renderFrames() {
-  renderTiming();
+  const tm = timing();
+  renderTiming(tm);
   const box = $('frames'); box.innerHTML = '';
   frames.forEach((f, i) => {
     const d = document.createElement('div');
@@ -1135,6 +1267,12 @@ function renderFrames() {
 
     const num = document.createElement('div');
     num.className = 'fnum'; num.textContent = i + 1;
+    if (!tm.clean && i === tm.cutFrame) {
+      const cut = document.createElement('span');
+      cut.className = 'cut'; cut.textContent = ' ✂';
+      cut.title = t('timingCutTitle');
+      num.appendChild(cut);
+    }
     d.appendChild(num);
 
     const cv = document.createElement('canvas');
@@ -1171,7 +1309,7 @@ function renderFrames() {
     // watch while tuning a hold, so it has to move as the number does. Change
     // additionally writes the clamped value back, or a field left blank reads
     // as empty while the frame is really holding 200 ms.
-    const commit = () => { f.hold = Math.max(20, +inp.value || 200); renderTiming(); };
+    const commit = () => { f.hold = Math.max(20, +inp.value || 200); renderTiming(timing()); };
     inp.oninput = commit;
     inp.onchange = () => { commit(); inp.value = f.hold; };
     inp.onclick = e => e.stopPropagation();
