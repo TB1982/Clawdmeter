@@ -77,8 +77,8 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // gone from the build entirely (see EXCLUDE in convert_to_c.js); "expression
     // sleep" is still compiled in because the idle screen draws it directly in
     // ui.cpp, but nothing picks it here any more.
-    { "idle hearts", "swim summer", "hanabi", "idle blossom", "fm listening",
-      "expression wink", NULL, NULL, NULL },
+    { "idle hearts", "swim summer", "hanabi", "rainny days", "idle blossom",
+      "fm listening", "expression wink", NULL, NULL },
     // Group 1 — normal pace. "work type" is deliberately absent: it exists in
     // splash_anims[] but nothing picks it. Four frames, four pixels of arm
     // twitch, no keyboard and no surface — there is nothing in it to read as
