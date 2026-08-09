@@ -103,7 +103,12 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // It retired "dance sway dj", the weakest of the three by measurement —
     // slowest loop in the busiest group, and 53% of its motion was sparkles in
     // empty space rather than anything happening to him.
-    { "surfing", "dance bounce dj", "dance djmix", NULL },
+    // "this is fine" retired "dance bounce dj" on 2026-08-10 and finishes the
+    // thought: the three left are a wave carrying him, a room burning around
+    // him, and a desk he is standing at. All three have something under him.
+    // The two DJ animations that went had him in mid-air, which is what Nova
+    // could see was wrong about them long before any of us could say why.
+    { "surfing", "this is fine", "dance djmix", NULL },
 };
 
 static bool groups_resolved = false;
