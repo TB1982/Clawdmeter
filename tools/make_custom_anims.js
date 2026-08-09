@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const zlib = require('zlib');
+const { writeRgbPng } = require('./lib/png');
 
 const SRC_DIR = path.join(__dirname, 'claudepix_data');
 const OUT_DIR = path.join(__dirname, 'custom_anims');
@@ -272,23 +272,10 @@ function buildDecoratedVariant({ name, base: baseName, description, palette,
 }
 
 // ── preview PNG (contact sheet of every frame) ───────────────────────────────
-function crc32(buf) {
-  const table = [];
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    table[n] = c >>> 0;
-  }
-  let crc = 0xffffffff;
-  for (const b of buf) crc = table[(crc ^ b) & 0xff] ^ (crc >>> 8);
-  return (crc ^ 0xffffffff) >>> 0;
-}
-function chunk(type, data) {
-  const len = Buffer.alloc(4); len.writeUInt32BE(data.length);
-  const td = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-  const crc = Buffer.alloc(4); crc.writeUInt32BE(crc32(td));
-  return Buffer.concat([len, td, crc]);
-}
+// This one is tuned to what this generator produces — flat 6px cells, no badge
+// row — and stays here because judging a prop against its base is the reason
+// the script has a preview at all. For any animation JSON on disk, including
+// these once written, tools/preview_anim.js renders both device scales.
 function writePreview(file, anim, cell = 6, cols = 8) {
   const pal = anim.palette.map(s => s === 'transparent' ? [0, 0, 0]
     : [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)]);
@@ -309,18 +296,7 @@ function writePreview(file, anim, cell = 6, cols = 8) {
     }
   });
 
-  const raw = Buffer.alloc((W * 3 + 1) * H);
-  for (let y = 0; y < H; y++) {
-    raw[y * (W * 3 + 1)] = 0;
-    img.copy(raw, y * (W * 3 + 1) + 1, y * W * 3, (y + 1) * W * 3);
-  }
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4);
-  ihdr[8] = 8; ihdr[9] = 2;
-  fs.writeFileSync(file, Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0)),
-  ]));
+  writeRgbPng(file, W, H, img);
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────

@@ -5,12 +5,25 @@ firmware/.vscode/
 # OS
 .DS_Store
 
-# Claude Code
-.claude/
+# Claude Code — session state, worktrees and local settings stay local. Skills
+# are the exception: a skill is a written-down way of working on this repo, so
+# it belongs to the repo the same way tools/ and docs/ do.
+#
+# The first line is not redundant. A global core.excludesFile may carry a blanket
+# `.claude/`, and git will not re-include anything whose parent directory is
+# excluded — so the directory has to be un-excluded before its contents can be
+# selectively let back in. Repo .gitignore outranks the global file, so this
+# works without touching anyone's machine config.
+!.claude/
+.claude/*
+!.claude/skills/
 
 # Node tooling deps (npm install --no-save)
 tools/node_modules/
 tools/package-lock.json
+
+# Contact sheets from tools/preview_anim.js — regenerate, don't commit
+tools/preview/
 
 # Mac daemon venv
 daemon/.venv/
