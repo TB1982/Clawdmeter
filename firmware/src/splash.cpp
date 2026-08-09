@@ -93,8 +93,13 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // animation built to fill a whole slot in a single pass, so its walk-in
     // plays once instead of three times and is never cut part-way.
     { "work mode", "expression surprise", "dance bounce" },
-    // Group 3 — heavy
-    { "dance bounce dj", "dance sway dj", "dance djmix", NULL },
+    // Group 3 — heavy. "surfing" leads it from 2026-08-09: at the busiest rate
+    // you are not driving, the wave is carrying you, which is a more honest
+    // thing for this band to say than a third animation of him dancing.
+    // It retired "dance sway dj", the weakest of the three by measurement —
+    // slowest loop in the busiest group, and 53% of its motion was sparkles in
+    // empty space rather than anything happening to him.
+    { "surfing", "dance bounce dj", "dance djmix", NULL },
 };
 
 static bool groups_resolved = false;
