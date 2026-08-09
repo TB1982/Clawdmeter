@@ -74,6 +74,30 @@ loop, not from a still. Ship it to the device and ask. *(2026-08-09)*
 
 ---
 
+## Props that mean something
+
+A prop carrying *mood* — a heart, a flower, a dust puff — can come and go however
+it likes. A prop carrying *meaning* — a word, a number, a symbol — cannot, and
+the difference is not a matter of taste.
+
+`expression wink` lights its OK sign one letter at a time, the O a frame before
+the K, but removes both at once. That asymmetry looks like an oversight and is
+not. **Assembling toward a meaning is free; disassembling away from one is not**,
+because the intermediate states of a word are other words. Going in you read
+nothing, then O, then OK — the first two are unfinished. Coming out staggered you
+would read OK, then a lone O, which is not an unfinished OK, it is a different
+thing on the screen.
+
+So: stagger the entrance of a semantic prop if you like, and take it off whole.
+The same holds for anything read rather than felt — a percentage, an arrow, a
+digit. *(Nova, 2026-08-09)*
+
+Corollary for the rule above about animating colour before dimensions: with
+lettering, brightness is the only dimension you have. The OK runs
+`#FFD98A → #FFD24D → #FFBF00 → #FFD98A → #FFE699` and never changes shape.
+
+---
+
 ## The two scales
 
 The same animation is drawn twice: large on the splash, and 4 px/cell as the
