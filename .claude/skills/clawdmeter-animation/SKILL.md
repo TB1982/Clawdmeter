@@ -269,6 +269,26 @@ why, rather than quietly dropping something the user arranged.
 If you are replacing an existing animation by reusing its name, it is already
 registered and this step is done.
 
+## The one animation that isn't picked by rate
+
+`opening` plays once, on the first splash after power-up, and then hands over to
+the rate groups. It is the only animation with a beginning and an end rather than
+a loop, and the only one not chosen for what it says about the current usage
+rate.
+
+If you are asked for a boot animation, that is the slot — there is one, and the
+mechanism lives in `splash.cpp` around `SPLASH_OPENING_ANIM`. Do **not** add it
+to `GROUP_NAMES`: nothing should rotate onto it, `splash_next()` skips it on
+purpose, and the flag that starts it is only true once per boot.
+
+Two consequences worth knowing before editing it:
+
+- **It never appears as a corner badge**, so the 4 px/cell rule does not apply to
+  it. Lettering that is illegible in the badge row of a contact sheet is fine
+  here and should not be "fixed".
+- **It is not cut short by the rotate timer.** Its own hold times are the whole
+  budget, so length is a free choice in a way it is not anywhere else.
+
 ## Attribution
 
 This repository holds no rights in what it renders. The creature is Anthropic's
