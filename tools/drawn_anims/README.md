@@ -67,7 +67,9 @@ too.
 }
 ```
 
-20×20, at most 10 palette entries, cell values index the palette, holds in ms.
+20×20 (40×40 also validates, but no 40×40 animation has been checked on the two
+C6 boards), at most 16 palette entries, cell values index the palette — every
+one must be less than the number of entries you declared — and holds in ms.
 `convert_to_c.js` validates all of it and fails loudly — the firmware reads
 these arrays with fixed strides and no bounds checks, so a 19-row grid doesn't
 produce a wrong picture, it produces a device reading past the end of an array.

@@ -29,11 +29,12 @@ Override URL or output dir with `--base` and `--out`.
 
 ## 2. Draw or fix animations (optional)
 
-`anim_editor.html` is a 20×20 animation editor. Open it straight off disk — one
-file, no dependencies, no server, nothing fetched.
+`anim_editor.html` is a 20×20 / 40×40 animation editor. Open it straight off
+disk — one file, no dependencies, no server, nothing fetched.
 
 It carries what the firmware cares about rather than what a general pixel editor
-offers: 20×20 and the 16-colour cap enforced, per-frame hold times, onion skin,
+offers: the grid sizes the pipeline accepts and the 16-colour cap enforced,
+per-frame hold times, onion skin,
 playback at the real holds, and both device previews on black (24px/cell splash,
 4px/cell corner badge). A colour that looks fine on white can vanish on the
 panel and a shape that reads at 24px can turn to mush at 4px, so previewing at
@@ -85,6 +86,35 @@ frame because that is what the firmware reads, and adding layers means an
 editor-side model that flattens on export — worth doing if animating props
 becomes common, not worth faking with an overlay.
 
+## 2b. Look at it
+
+```bash
+node preview_anim.js "work think"     # by name, or by path to a .json
+node preview_anim.js --all            # the whole catalogue
+```
+
+Writes a contact sheet per animation to `tools/preview/` (gitignored) with both
+device scales in one image: the splash scale on top, 4 px/cell along the bottom.
+Colours are shown the way the device shows them — the claudepix body tint
+remapped, everything quantised to RGB565, on black.
+
+Both scales, because they fail differently and neither failure is visible from
+the other. The editor shows the same pair for the same reason; this is that check
+without opening a browser, which is what makes it usable from a script or by an
+agent that would otherwise have to ask a human to go and look.
+
+## 2c. Have Claude draw one
+
+`.claude/skills/clawdmeter-animation/` is a skill carrying this pipeline as
+instructions: the format contract, what the black panel does to colour choices,
+the measured shape of the existing catalogue, and the two silent traps (a
+duplicate `name` replaces another animation; a name absent from `GROUP_NAMES`
+never appears on the device). It requires the preview step above rather than
+suggesting it.
+
+It is checked in rather than kept in `~/.claude/`, so it travels with the repo
+and can be corrected like any other file here when the pipeline changes.
+
 ## 3. Convert to C
 
 ```bash
@@ -94,7 +124,10 @@ node convert_to_c.js
 Reads `tools/claudepix_data/*.json`, `tools/custom_anims/*.json` and
 `tools/drawn_anims/*.json` and emits a single
 `firmware/src/splash_animations.h` with:
-- `splash_<ident>_frames[N][400]` — per-frame cell codes (0 = empty, 1 = body, 2 = eye)
+- `splash_<ident>_frames[N * side * side]` — per-frame cell codes (0 = empty,
+  1 = body, 2 = eye), flat and back to back. The stride used to live in the array
+  type as `[N][400]`, which forced every animation in a build to one size; it is
+  a field on `splash_anim_def_t` now, read through `splash_frame(anim, i)`.
 - `splash_<ident>_holds[N]` — per-frame hold time in ms
 - `splash_anims[]` — master table with name, category, frame count, pointers
 - `SPLASH_ANIM_COUNT`
