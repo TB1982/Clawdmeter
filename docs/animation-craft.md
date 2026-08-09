@@ -74,6 +74,31 @@ loop, not from a still. Ship it to the device and ask. *(2026-08-09)*
 
 ---
 
+## The two scales
+
+The same animation is drawn twice: large on the splash, and 4 px/cell as the
+corner badge on the usage screen. They fail differently, which is why
+`preview_anim.js` renders both and the editor previews both.
+
+**At badge scale, what survives is density and colour spread, not shape.** The
+whole animation is 80×80 screen pixels there and a single 5-cell flower is about
+twelve of them — nobody reads five petals at that size. What is legible is
+whether there is a lot of something, and whether it is made of more than one
+colour.
+
+This is what decided `idle blossom`. The hand-drawn wreath carries 40 flower
+cells at its peak in five colours; the mathematically exact ellipse built beside
+it carried 27 in the same five. On the splash that difference reads as "fuller".
+On the badge it is closer to the difference between something and nothing — the
+wreath is the first version of that animation to read as anything at all at
+4 px/cell. *(2026-08-09)*
+
+Corollary: when choosing between two versions, check the badge before deciding.
+A change that looks like a matter of taste at 24 px/cell can be the whole image
+at 4.
+
+---
+
 ## Timing
 
 **Uneven holds are right for breathing and wrong for travelling.** `idle blossom`
