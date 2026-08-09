@@ -44,6 +44,18 @@ his arm with its centre nowhere on screen at all.
 Cut flowers read as flowers *behind* him showing an edge, which is exactly what a
 ring around him looks like from the front. *(Nova, 2026-08-09)*
 
+**Dithering does not survive 20 cells.** The official Claude FM art draws its
+wave as a halftone of dots, and copying that for `surfing` produced a
+chequerboard — a 4×4 Bayer threshold spread across a 20-wide grid is a visible
+pattern, not a gradient. That canvas is roughly ten times wider, which is what
+lets its dots blur into one. Everything that reads here is solid shapes with a
+broken edge: the rain, the leaf, the wreath.
+
+For water, what worked was solid fill with the boundary displaced by two
+scrolling sines of unrelated period. The edge then *travels*. Displacing it with
+per-frame random noise instead makes it boil, which reads as television static.
+*(2026-08-09)*
+
 ---
 
 ## What the tools can and cannot tell you
@@ -71,6 +83,21 @@ the others. *(2026-08-09)*
 **A human watching it is an instrument you do not have.** Every substantive
 correction to `dance bounce` and `idle blossom` came from someone watching the
 loop, not from a still. Ship it to the device and ask. *(2026-08-09)*
+
+**Three metrics can all miss what one look finds.** Asked why `dance djmix`
+satisfied and `dance bounce dj` and `dance sway dj` did not, three measurements
+were computed and none of them explained it:
+
+| | djmix | bounce dj | sway dj |
+|---|---|---|---|
+| changed cells per frame | 73.2 | 67.8 | 68.0 |
+| share of motion on the figure | 64% | **70%** | 47% |
+| colours involved per frame | 7.0 | 5.4 | 4.8 |
+
+By the second measure `bounce dj` is the *better* animation. The actual answer —
+djmix has a mixing desk and the other two have nothing under them — was visible
+in the contact sheet the whole time. Measure after looking, not instead of.
+*(2026-08-09)*
 
 ---
 
@@ -217,6 +244,19 @@ the columns run 0–19, so column 0's mirror is column 20 and does not exist.
 Exact mirror symmetry therefore has to drop cells at the far left, or accept a
 few asymmetric ones. *(2026-08-09)*
 
+**Nothing floats.** Nova's son, who had not seen any of the drafts, said he could
+not tell the laptop in `work mode` was a laptop: it hung in mid air with nothing
+under it. She drew a desk and it read immediately.
+
+It is the same fault that makes `dance bounce dj` and `dance sway dj` unsatisfying
+while `dance djmix` works. djmix has a mixing desk — a horizontal structure
+spanning the frame, low in it. The other two are a creature with headphones
+bobbing in a void. The prop is not decoration, it is the floor, and it is also
+the only part of these animations that survives the 4 px badge.
+
+Both times the fault was found by someone looking at the whole picture rather
+than at the thing being worked on. *(Nova's son, and 2026-08-09)*
+
 **Regularity is not the goal.** A mathematically exact ellipse was built as a
 comparison for `idle blossom` — zero asymmetric cells in all six frames against
 `0,0,1,7,5,1` for the hand-drawn one — and it lost: it peaked at 27 flower cells
@@ -242,6 +282,17 @@ His axis is column 10 — his hands sit at 3 and 17, not 3 and 16.
 Catalogue ranges as of 2026-08-09: 4–31 frames (typically 12–24), holds 60–2400
 ms, palettes 3–16 entries, creature-only footprint 15×13 to 19×17 inside the
 20×20 grid.
+
+**A full-size creature leaves no room for scenery.** `surfing` as first drawn
+occupies 61% of the grid. At his own height every row has 5–9 free cells and they
+are split into slivers either side of him, so water drawn beside him could only
+ever be a bar — three attempts confirmed it before the measurement was taken.
+Rows 0–4 have 14–18 free, so the wave had to arrive over the top instead.
+
+`dance djmix` fits an entire mixing desk because its creature is 15×9 with eight
+rows below it, against 15×13 with three. If an animation needs a set, the
+creature has to be drawn small *first*; scenery cannot be added to a full-size
+one afterwards. *(2026-08-09)*
 
 ---
 
