@@ -177,6 +177,14 @@ static void check_serial_cmd() {
             // Visual counterpart to `buzz`: fires the reset celebration without
             // waiting five hours for a real window refill.
             else if (strcmp(cmd_buf, "party") == 0) splash_celebrate();
+            // The same thing the PWR button does on the splash. Without it the
+            // only way to put a specific animation on screen is to press the
+            // board, which makes `screenshot` useless for checking one — the
+            // rate groups decide what's showing, and you can't fake a usage
+            // rate from here.
+            else if (strcmp(cmd_buf, "next") == 0) {
+                if (ui_get_current_screen() == SCREEN_SPLASH) splash_next();
+            }
             cmd_pos = 0;
         } else if (cmd_pos < CMD_BUF_SIZE - 1) {
             cmd_buf[cmd_pos++] = c;

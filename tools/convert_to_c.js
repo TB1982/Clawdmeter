@@ -54,6 +54,10 @@ const EXCLUDE = new Set([
   // Nova's call, 2026-08-09: not wanted on the device. Kept as editor samples.
   'idle breathe',
   'idle blink',
+  // Retired 2026-08-09 when "work mode" took its slot in the active group.
+  // Note this is only the plain one — "dance sway dj" is a different animation
+  // and still carries a slot in group 3.
+  'dance sway',
   // Freed once ui.cpp's idle screen stopped naming it: that screen draws one
   // animation directly rather than picking from a rate group, so anything it
   // names has to stay in the build no matter what the groups say.
