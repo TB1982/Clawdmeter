@@ -55,9 +55,12 @@ const EXCLUDE = new Set([
   'idle breathe',
   'idle blink',
   // Retired 2026-08-09 when "work mode" took its slot in the active group.
-  // Note this is only the plain one — "dance sway dj" is a different animation
-  // and still carries a slot in group 3.
   'dance sway',
+  // And its DJ variant later the same day, when "surfing" took the lead slot in
+  // the heavy group. It was the weakest of that group's three by measurement:
+  // the slowest loop in the busiest band, with 53% of its motion being sparkles
+  // in empty space rather than anything happening to him.
+  'dance sway dj',
   // Freed once ui.cpp's idle screen stopped naming it: that screen draws one
   // animation directly rather than picking from a rate group, so anything it
   // names has to stay in the build no matter what the groups say.
