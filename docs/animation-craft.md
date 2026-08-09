@@ -74,6 +74,33 @@ loop, not from a still. Ship it to the device and ask. *(2026-08-09)*
 
 ---
 
+## Fix the frame, not the class
+
+When something specific is reported, fix the specific thing. Turning it into a
+general rule is the failure mode, because a rule optimises a proxy and the proxy
+is not what made the animation work.
+
+Twice in one day, both times the observation was right and the generalisation was
+the error:
+
+**"The entrance is staggered and the exit isn't."** True, and mirroring it would
+have been wrong: `expression wink`'s OK sign has to leave whole, because the
+intermediate states of a word are other words. See *Props that mean something*.
+
+**"Three drops landed in a row above his head."** True of one frame. Made into
+"no two drops on the same row anywhere", it forced one drop per column, which
+removed the strung-out fall lines that make rain read as rain and halved the
+density. The result was snow. The fix that worked was narrow: no two drops on a
+row *inside the band enclosed between the leaf and him*, and never three
+anywhere. Ordinary pairs out in the open are what rain looks like.
+
+The tell in both cases is the same. A local artefact was explained by a global
+symmetry — entrances mirror exits, drops never align — and the symmetry sounded
+principled enough that it was not checked against what it would cost. Ask what
+the rule forbids that you currently rely on. *(2026-08-09)*
+
+---
+
 ## Props that mean something
 
 A prop carrying *mood* — a heart, a flower, a dust puff — can come and go however
