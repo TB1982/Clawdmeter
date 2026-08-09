@@ -2,6 +2,11 @@
 
 Pipeline for getting 20×20 pixel animations — scraped or your own — onto the device.
 
+This file is the machinery. [`docs/animation-craft.md`](../docs/animation-craft.md)
+is the craft: which shapes survive at this size, what the preview can and cannot
+show you, and the mistakes already made and paid for. Dated, so a claim there can
+be read as history rather than as an instruction that may have gone stale.
+
 ## 1. Scrape
 
 ```bash

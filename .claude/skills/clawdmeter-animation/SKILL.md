@@ -16,6 +16,12 @@ description: >-
 You are authoring for a physical panel, not a screen. Everything below follows
 from that.
 
+**Read [`docs/animation-craft.md`](../../../docs/animation-craft.md) before
+drawing anything.** This file is the procedure; that one is what we have learned
+about making an animation *read* — which shapes survive 20×20, what the tools can
+and cannot tell you, and the mistakes that have already been made and paid for.
+It is dated, so you can see what was found when.
+
 The target is a **20x20 grid of palette indices**, a handful of frames, each with
 a hold time in milliseconds. It goes to `tools/drawn_anims/`, gets compiled by
 `tools/convert_to_c.js` into `firmware/src/splash_animations.h`, and is rendered

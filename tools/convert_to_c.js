@@ -39,6 +39,27 @@ const PALETTE_SIZE = 16;
 // a 2x2 block, so it looks identical on screen and can then be refined.
 const GRID_SIZES = [20, 40];
 
+// Animations that stay in the source directories — so they keep working as
+// editor samples and as bases for make_custom_anims.js — but are not emitted
+// into the firmware at all.
+//
+// Removing a name from GROUP_NAMES in splash.cpp only stops it being *picked*;
+// its frames are still compiled in and still cost 400 bytes each. This list is
+// the other half: it costs the flash back.
+//
+// Excluding by name rather than by file, because a name can exist in more than
+// one source directory and dropping only the override would leave the scraped
+// original in the build.
+const EXCLUDE = new Set([
+  // Nova's call, 2026-08-09: not wanted on the device. Kept as editor samples.
+  'idle breathe',
+  'idle blink',
+  // Freed once ui.cpp's idle screen stopped naming it: that screen draws one
+  // animation directly rather than picking from a rate group, so anything it
+  // names has to stay in the build no matter what the groups say.
+  'expression sleep',
+]);
+
 function safeIdent(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
@@ -169,6 +190,18 @@ function main() {
   }
   index.length = 0;
   index.push(...byName.values());
+
+  const dropped = index.filter(e => EXCLUDE.has(e.meta.name)).map(e => e.meta.name);
+  if (dropped.length) {
+    for (const name of dropped) console.log(`  ${name}: excluded from the firmware`);
+    const missing = [...EXCLUDE].filter(n => !dropped.includes(n));
+    if (missing.length) {
+      console.error(`EXCLUDE names that match no animation: ${missing.join(', ')}`);
+      console.error('A typo here silently excludes nothing. Fix or remove the entry.');
+      process.exit(1);
+    }
+  }
+  index.splice(0, index.length, ...index.filter(e => !EXCLUDE.has(e.meta.name)));
   console.log(`Converting ${index.length} animations`);
 
   let out = '';
