@@ -54,6 +54,10 @@ const EXCLUDE = new Set([
   // Nova's call, 2026-08-09: not wanted on the device. Kept as editor samples.
   'idle breathe',
   'idle blink',
+  // Freed once ui.cpp's idle screen stopped naming it: that screen draws one
+  // animation directly rather than picking from a rate group, so anything it
+  // names has to stay in the build no matter what the groups say.
+  'expression sleep',
 ]);
 
 function safeIdent(s) {
