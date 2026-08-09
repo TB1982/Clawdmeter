@@ -106,6 +106,9 @@
   .panel { background: var(--panel); border: 1px solid var(--line); padding: 12px; margin-bottom: 10px; }
   .panel h2 { font-size: 12px; margin: 0 0 8px; color: var(--dim); font-weight: normal;
               text-transform: uppercase; letter-spacing: .08em; }
+  /* The heading is uppercased; a unit inside it must not be. "2,700 MS" reads
+     as a different word. */
+  .panel h2 #timing { text-transform: none; letter-spacing: 0; }
   button, select, input {
     font: inherit; background: #2a2620; color: var(--text);
     border: 1px solid var(--line); padding: 4px 9px; cursor: pointer;
@@ -320,7 +323,8 @@
         </div>
 
     <div class="panel">
-          <h2 data-i18n="framesH" data-i18n-title="frameHint">影格</h2>
+          <h2 data-i18n-title="frameHint"><span data-i18n="framesH">影格</span>
+              <span id="timing" class="dim"></span></h2>
           <div class="frames" id="frames"></div>
           <div class="row" style="margin-top:8px">
             <button id="f-add" data-i18n="frameAdd">+ 新增</button>
@@ -343,6 +347,14 @@
 // Keep this in step with PALETTE_SIZE in tools/convert_to_c.js; the converter
 // rejects a file that exceeds it rather than silently dropping colours.
 const PALETTE_MAX = 16;
+
+// How long one animation holds the splash before the device rotates to the
+// next one in its rate group. Keep in step with SPLASH_ROTATE_INTERVAL_MS in
+// firmware/src/splash.cpp. The rotation is not aligned to loop boundaries —
+// the timer expires wherever it expires — so a loop that doesn't divide this
+// cleanly is cut part-way through its last pass. An animation whose ending
+// carries the meaning (a finale, a landed pose) wants a whole number here.
+const SLOT_MS = 20000;
 
 // The grid side is a property of the animation, not of the editor. Keep this in
 // step with GRID_SIZES in tools/convert_to_c.js, which reads the side off frame
@@ -383,6 +395,8 @@ const I18N = {
   palH: '這支動畫的顏色', pickH: '選色',
   pickHint: '點一下就加進上面並選取。已經在用的會直接選取。', addColour: '加入',
   framesH: '影格', frameHint: '沒有選取範圍時，← → 可以快速切換影格',
+  timingSum: '{ms} ms · {loops} 輪',
+  timingTitle: '一支動畫在畫面上停留 {slot} 秒，這是總長與這段時間裡跑的輪數',
   frameAdd: '+ 新增', frameDup: '複製本格', frameDel: '刪除',
   frameLeft: '← 前移', frameRight: '後移 →',
   infoH: '動畫資訊', labelName: '名稱', labelCat: '分類', labelSize: '尺寸',
@@ -428,6 +442,8 @@ const I18N = {
   palH: "This animation's colours", pickH: 'Colours',
   pickHint: 'Click to add and select. Already in use selects directly.', addColour: 'Add',
   framesH: 'Frames', frameHint: 'With nothing selected, ← → step through frames',
+  timingSum: '{ms} ms · {loops}×',
+  timingTitle: 'An animation holds the screen for {slot} s — this is the loop length and how many times it runs in that time',
   frameAdd: '+ Add', frameDup: 'Duplicate', frameDel: 'Delete',
   frameLeft: '← Move left', frameRight: 'Move right →',
   infoH: 'Animation', labelName: 'Name', labelCat: 'Category', labelSize: 'Size',
@@ -473,6 +489,8 @@ const I18N = {
   palH: 'このアニメーションの色', pickH: '色を選ぶ',
   pickHint: 'クリックで上に追加して選択。使用中の色はそのまま選択されます。', addColour: '追加',
   framesH: 'コマ', frameHint: '選択範囲がないときは ← → でコマを切り替えられます',
+  timingSum: '{ms} ms · {loops} 周',
+  timingTitle: '1 本のアニメは {slot} 秒表示されます。合計時間と、その間に回る周回数です',
   frameAdd: '+ 追加', frameDup: 'このコマを複製', frameDel: '削除',
   frameLeft: '← 前へ', frameRight: '後ろへ →',
   infoH: 'アニメーション情報', labelName: '名前', labelCat: '分類', labelSize: 'サイズ',
@@ -518,6 +536,8 @@ const I18N = {
   palH: '这支动画的颜色', pickH: '选色',
   pickHint: '点一下就加进上面并选取。已经在用的会直接选取。', addColour: '加入',
   framesH: '帧', frameHint: '没有选取范围时，← → 可以快速切换帧',
+  timingSum: '{ms} ms · {loops} 轮',
+  timingTitle: '一支动画在画面上停留 {slot} 秒，这是总长与这段时间里跑的轮数',
   frameAdd: '+ 新增', frameDup: '复制本帧', frameDel: '删除',
   frameLeft: '← 前移', frameRight: '后移 →',
   infoH: '动画信息', labelName: '名称', labelCat: '分类', labelSize: '尺寸',
@@ -565,6 +585,9 @@ function t(key, vars) {
   // leave one of them stale the first time someone adds a string. Not named
   // {n} because several strings already use {n} for their own local variable.
   s = s.split('{side}').join(N);
+  // {slot} is the rotation interval in whole seconds, substituted globally for
+  // the same reason again — it's prose in four languages.
+  s = s.split('{slot}').join(SLOT_MS / 1000);
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
   return s;
 }
@@ -1089,7 +1112,20 @@ function frameIndexAt(x, y) {
   return fr ? [...$('frames').children].indexOf(fr) : null;
 }
 
+// ── timing ───────────────────────────────────────────────────────────────────
+// The loop length and how many times it runs inside one splash slot. Sits in
+// the Frames heading, where the palette count sits in its own — a number you
+// glance at while editing holds, not a paragraph to read.
+function renderTiming() {
+  const total = frames.reduce((s, f) => s + f.hold, 0);
+  $('timing').textContent = t('timingSum', {
+    ms: total.toLocaleString('en-US'), loops: (SLOT_MS / total).toFixed(1),
+  });
+  $('timing').title = t('timingTitle');
+}
+
 function renderFrames() {
+  renderTiming();
   const box = $('frames'); box.innerHTML = '';
   frames.forEach((f, i) => {
     const d = document.createElement('div');
@@ -1129,7 +1165,13 @@ function renderFrames() {
 
     const inp = document.createElement('input');
     inp.type = 'number'; inp.value = f.hold; inp.min = 20; inp.step = 20; inp.title = t('holdTitle');
-    inp.onchange = () => { f.hold = Math.max(20, +inp.value || 200); };
+    // On input, not just on change: the total in the heading is the thing you
+    // watch while tuning a hold, so it has to move as the number does. Change
+    // additionally writes the clamped value back, or a field left blank reads
+    // as empty while the frame is really holding 200 ms.
+    const commit = () => { f.hold = Math.max(20, +inp.value || 200); renderTiming(); };
+    inp.oninput = commit;
+    inp.onchange = () => { commit(); inp.value = f.hold; };
     inp.onclick = e => e.stopPropagation();
     d.appendChild(inp);
 
