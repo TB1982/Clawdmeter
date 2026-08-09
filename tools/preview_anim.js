@@ -14,13 +14,22 @@
  * remapped to brand terracotta and every colour is quantised to RGB565, so two
  * hexes that collapse to the same 16-bit value look identical here too.
  *
+ * It also counts what changes between frames, because there is a class of defect
+ * the contact sheet cannot show: a frame byte-identical to the one before it
+ * looks exactly like a deliberate pause and is indistinguishable from one by
+ * eye. Arithmetic finds it immediately. Merging such a frame into its
+ * predecessor's hold is provably lossless — splash.cpp's loop is "hold expires →
+ * advance → render", with nothing keyed to the frame index — so a redundant
+ * frame is 400 bytes of flash holding a picture the device already has.
+ *
  * Usage:
  *   node preview_anim.js <file.json|name> [...]   one sheet per animation
  *   node preview_anim.js --all                    the whole catalogue
  *   node preview_anim.js "work think" --cell 12   bigger splash block
+ *   node preview_anim.js "work think" --rhythm    per-frame change table
  *
  * Options: --out DIR (default tools/preview/), --cell N (default 8), --cols N
- *          (default 8), --badge N (default 4)
+ *          (default 8), --badge N (default 4), --rhythm
  */
 
 const fs = require('fs');
@@ -112,6 +121,20 @@ function check(data, where) {
   return side;
 }
 
+// Cells that differ from the previous frame, wrapping at the loop point — index
+// 0 is compared against the last frame, since that is the seam the device
+// actually plays.
+function deltas(frames, side) {
+  return frames.map((f, i) => {
+    const prev = frames[(i - 1 + frames.length) % frames.length].grid;
+    let d = 0;
+    for (let y = 0; y < side; y++)
+      for (let x = 0; x < side; x++)
+        if (f.grid[y][x] !== prev[y][x]) d++;
+    return d;
+  });
+}
+
 function blockSize(frames, side, cell, cols, pad) {
   const tile = side * cell;
   const rows = Math.ceil(frames / cols);
@@ -170,10 +193,24 @@ function render(file, data) {
 
   const total = data.frames.reduce((s, f) => s + f.hold, 0);
   const holds = data.frames.map(f => f.hold);
+  const d = deltas(data.frames, side);
+  const dup = d.filter(v => v === 0).length;
+
   console.log(`${data.name}  [${where}]`);
   console.log(`  ${side}x${side}, ${data.frames.length} frames, ${data.palette.length} palette entries`);
   console.log(`  loop ${(total / 1000).toFixed(2)}s   holds ${Math.min(...holds)}-${Math.max(...holds)} ms`);
   console.log(`  ${path.relative(process.cwd(), out)}  (${W}x${H}, top ${CELL}px/cell, bottom ${BADGE}px/cell)`);
+
+  if (flag('--rhythm')) {
+    console.log('    #  hold   changed');
+    d.forEach((v, i) => console.log(
+      `   ${String(i).padStart(2)}  ${String(data.frames[i].hold).padStart(4)}  ${v === 0 ? '     — (identical to previous)' : String(v).padStart(6)}`));
+  }
+  if (dup) {
+    console.log(`  ${dup} frame${dup > 1 ? 's' : ''} identical to the one before — `
+              + `${dup * side * side} bytes storing a picture the device already has.`);
+    console.log('  Merging each into its predecessor\'s hold plays identically; holds are uint16_t, so keep sums under 65535.');
+  }
   return out;
 }
 

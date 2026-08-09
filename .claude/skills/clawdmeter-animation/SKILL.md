@@ -119,11 +119,68 @@ it.
 Keep the scope to one creature, one situation. This grid does not hold two
 characters or a scene change.
 
+## Iterating on an existing animation
+
+This is the normal case, not the exception. Of the 17 files in
+`tools/drawn_anims/`, **14 replace an animation that already existed** and only
+three are new. Most of the work on this catalogue has been fixing, and you should
+expect to be doing that more often than drawing.
+
+**Measure before you redraw.** The contact sheet is necessary and not sufficient.
+There is a whole class of defect it cannot show, because a frame identical to the
+one before it looks exactly like a deliberate pause:
+
+```bash
+node tools/preview_anim.js "idle look around" --rhythm
+```
+
+`idle look around` reads as seventeen frames of a creature glancing about. Five
+of those frames change nothing at all — a third of the animation is the device
+redrawing a picture it already has. That is invisible to the eye and obvious to
+arithmetic, and no amount of staring at the sheet would have found it.
+
+Merging a redundant frame into its predecessor's hold plays identically, because
+`splash.cpp`'s loop is *hold expires → advance → render* with nothing keyed to
+the frame index. Holds are `uint16_t`, so keep merged sums under 65535.
+
+### Defect classes seen in this catalogue
+
+Each of these was a real fix, and each recurs:
+
+| Defect | How it showed up |
+|---|---|
+| Prop in body colour | an orange snore bubble in `expression sleep`; body-coloured thought marks in `work think`. On black, terracotta-on-terracotta has no edge. |
+| Shape cropped off-grid | `dance bounce dj` put his head on row 0, so the headphone band arced above the grid and vanished, leaving two ear cups joined by nothing. |
+| Illegible at 4 px/cell | `work coding`, `expression wink` and `expression surprise` were all redrawn for the corner badge, not for the splash. |
+| No rhythm | uniform holds, or redundant frames standing in for a pause that `hold` already expresses. |
+
+### Doing it
+
+1. Render and read the current version, with `--rhythm`. Name the defect before
+   changing anything — "this reads as busy but eleven of sixteen frames move
+   fewer than ten cells" is a diagnosis; "it feels off" is not.
+2. Copy the current file if it lives in `tools/claudepix_data/`. **Never edit
+   that directory** — the scraper owns it and wipes it on the next run. A fix to
+   a scraped animation is a new file in `tools/drawn_anims/` carrying **the same
+   `name`**, which is exactly what makes it an override rather than a duplicate.
+3. Change only what you diagnosed. Frame counts, holds and staging are somebody's
+   arrangement; keeping the parts you are not fixing is not timidity, it is how
+   the change stays reviewable.
+4. Render **both** and read both:
+   ```bash
+   git show HEAD:tools/drawn_anims/thing.json > /tmp/thing-before.json
+   node tools/preview_anim.js /tmp/thing-before.json --out /tmp/before
+   node tools/preview_anim.js "thing"
+   ```
+5. Say what changed and what it cost — frames removed, bytes saved, what you
+   left alone.
+
 ## Workflow
 
 1. **Read the existing catalogue first.** `ls tools/drawn_anims/` and open the
    nearest animation to what is being asked for. Match its conventions; do not
-   invent a second way of doing the same thing.
+   invent a second way of doing the same thing. If the request is a fix rather
+   than a new animation, see *Iterating* above — that is the more common case.
 2. **Check the name** (see *Naming*).
 3. Write the JSON to `tools/drawn_anims/<name_with_underscores>.json`. That
    directory is drop-in — there is no index to update.
@@ -175,7 +232,8 @@ grep -h '"name"' tools/claudepix_data/*.json tools/custom_anims/*.json tools/dra
 ```
 
 Note this is intentional when editing: to fix an existing animation, reuse its
-exact name.
+exact name. See *Iterating on an existing animation* — that is what most work
+here turns out to be.
 
 Filenames are lowercased and non-alphanumerics collapse to `_` to form the C
 identifier, so keep filenames close to the name — `idle wave` →
