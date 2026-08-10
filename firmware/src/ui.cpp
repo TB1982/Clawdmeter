@@ -466,11 +466,17 @@ static void build_idle_group(lv_obj_t* parent) {
 
     // A shrunk-down creature sits between the header and the status line; the
     // animated "Listening…" status line carries the words, so no extra text is
-    // needed here. He looks around rather than sleeping — the screen is waiting
-    // for data, not idle in the sleepy sense, and this is the one place an
-    // animation is named directly rather than picked from a rate group, so the
-    // name has to exist in the build. See EXCLUDE in convert_to_c.js.
-    idle_creature = splash_mini_create(idle_group, "idle look around", L.idle_px);
+    // needed here. He is waiting rather than sleeping — this state means the
+    // link is up and the data has not arrived, not that there is nothing to do.
+    // "waiting" draws that literally: him at a bus stop in the rain, under a
+    // leaf. It is the only animation you cannot make appear on demand, which is
+    // why it is worth it being something.
+    //
+    // This is the one place an animation is named directly rather than picked
+    // from a rate group, so the name has to exist in the build and cannot be
+    // retired. See EXCLUDE in convert_to_c.js, and node tools/check_groups.js,
+    // which fails if this string stops resolving.
+    idle_creature = splash_mini_create(idle_group, "waiting", L.idle_px);
     lv_obj_t* creature = splash_mini_canvas(idle_creature);
     if (creature) lv_obj_align(creature, LV_ALIGN_CENTER, 0, -20);
 
