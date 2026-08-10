@@ -23,7 +23,7 @@ slot 0 is what you meet at boot, and the last slot is what loops back into it.
 |---|---|---|---|---|
 | 1 | idle hearts | 16 | 4,420 ms | 4.52 |
 | 2 | swim summer | 16 | 6,320 ms | 3.16 |
-| 3 | hanabi | 22 | 7,300 ms | 2.74 |
+| 3 | hanabi | 30 | 10,000 ms | 2 ✓ |
 | 4 | rainy days | 18 | 2,700 ms | 7.41 |
 | 5 | idle blossom | 6 | 1,320 ms | 15.15 |
 | 6 | fm listening | 16 | 3,080 ms | 6.49 |
@@ -61,7 +61,7 @@ slot 0 is what you meet at boot, and the last slot is what loops back into it.
 | 2 | this is fine | 10 | 2,000 ms | 10 ✓ |
 | 3 | dance djmix | 16 | 1,640 ms | 12.20 |
 
-A ✓ means the loop divides the slot exactly, so it is never cut part-way. 3 of 18 do: space, work mode, this is fine.
+A ✓ means the loop divides the slot exactly, so it is never cut part-way. 4 of 18 do: hanabi, space, work mode, this is fine.
 
 ## Not picked by a rate group
 
