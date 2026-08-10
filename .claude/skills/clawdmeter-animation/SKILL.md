@@ -191,14 +191,24 @@ Each of these was a real fix, and each recurs:
 3. Write the JSON to `tools/drawn_anims/<name_with_underscores>.json`. That
    directory is drop-in — there is no index to update.
 4. **Render and look at it** (see *Verification*). Iterate here, not later.
-5. `node tools/convert_to_c.js` — this validates and regenerates the header.
-6. **Register it** (see *Getting it on screen*).
-7. `node tools/build_editor_samples.js` — makes it loadable in
-   `tools/anim_editor.html`. It rewrites only the region between the
-   `BEGIN-SAMPLES` / `END-SAMPLES` markers.
+5. **Register it** (see *Getting it on screen*).
+6. `node tools/sync_animations.js` — one command for the four things that have
+   to happen together:
 
-Never hand-edit `firmware/src/splash_animations.h`. It is generated, and the
-header says so.
+   | | |
+   |---|---|
+   | `convert_to_c.js` | animations → `firmware/src/splash_animations.h` |
+   | `build_editor_samples.js` | animations → the samples embedded in `tools/anim_editor.html` |
+   | `gen_catalogue.js` | firmware → `docs/animation-catalogue.md` |
+   | `check_groups.js` | every name the firmware asks for resolves to something |
+
+   It stops at the first failure. Doing three of the four is the easy mistake:
+   skip the samples and the device and the web editor disagree about what
+   exists; skip the check and an animation ships compiled-in and unreachable.
+7. Build and flash.
+
+Never hand-edit `firmware/src/splash_animations.h` or
+`docs/animation-catalogue.md`. Both are generated and both say so.
 
 ## Verification — not optional
 
@@ -249,7 +259,14 @@ identifier, so keep filenames close to the name — `idle wave` →
 
 **Adding the file is not enough.** `splash.cpp` picks animations from
 `GROUP_NAMES`, matched by literal name, and anything not listed in a group is
-never chosen by anything. It will compile, ship, and never appear.
+never chosen by anything. It will compile, ship, and never appear. Cycling to it
+with the `next` serial command renders it perfectly either way, which is what
+makes this one hard to catch by looking — `node tools/check_groups.js` is the
+thing that catches it, and `sync_animations.js` runs it for you.
+
+[`docs/animation-catalogue.md`](../../../docs/animation-catalogue.md) is the
+current state, generated from the firmware: what is in each group, in playback
+order, with what is compiled in but picked by nothing.
 
 The groups are keyed to usage rate:
 
@@ -262,9 +279,12 @@ The groups are keyed to usage rate:
 
 Slot order inside a group is playback order, and slot 0 is what you meet at boot.
 
-`GROUP_MAX` is **9**, and **group 0 is currently full**. Adding to it means
-either displacing an entry or raising `GROUP_MAX` — say which you are doing and
-why, rather than quietly dropping something the user arranged.
+`GROUP_MAX` is **9**. How full each group is right now is in the catalogue above
+rather than written here, because a count written into a skill file is wrong the
+first time someone adds an animation and does not update it. If the group you
+want is full, adding to it means either displacing an entry or raising
+`GROUP_MAX` — say which you are doing and why, rather than quietly dropping
+something the user arranged.
 
 If you are replacing an existing animation by reusing its name, it is already
 registered and this step is done.
