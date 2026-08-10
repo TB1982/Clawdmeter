@@ -14,78 +14,38 @@
 //
 //   node tools/check_groups.js        # exits non-zero if a name resolves to nothing
 //
-// Run it after adding, renaming, or excluding an animation.
-const fs = require('fs');
-const path = require('path');
+// tools/sync_animations.js runs this as its last step, so normally you get it
+// for free. Run it directly after hand-editing GROUP_NAMES.
+const M = require('./lib/firmware_meta.js');
 
-const ROOT = path.join(__dirname, '..');
-const HDR = path.join(ROOT, 'firmware/src/splash_animations.h');
-const SPLASH = path.join(ROOT, 'firmware/src/splash.cpp');
-const SRC_DIR = path.join(ROOT, 'firmware/src');
+const built = M.built();
+const builtSet = new Set(built.map(a => a.name));
+const groups = M.groups();
+const direct = M.directNames();
+const defs = M.defines();
 
-const stripComments = s => s
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .split('\n').map(l => l.replace(/\/\/.*/, '')).join('\n');
-
-// --- what is actually in the build ------------------------------------------
-const built = [...fs.readFileSync(HDR, 'utf8').matchAll(/\{"([^"]+)", "/g)].map(m => m[1]);
-const builtSet = new Set(built);
-
-// --- what the rate groups ask for -------------------------------------------
-const splash = fs.readFileSync(SPLASH, 'utf8');
-const block = splash.match(/GROUP_NAMES\[GROUP_COUNT\]\[GROUP_MAX\] = \{([\s\S]*?)\n\};/);
-if (!block) {
-  console.error('could not find GROUP_NAMES in splash.cpp — has it been renamed?');
-  process.exit(2);
-}
-const groups = stripComments(block[1])
-  .split('\n').join(' ')
-  .split('},')
-  .map(row => [...row.matchAll(/"([^"]+)"/g)].map(m => m[1]))
-  .filter(g => g.length);
-
-// --- names hardcoded outside splash.cpp (the usage screen names one) ---------
-const direct = [];
-for (const f of fs.readdirSync(SRC_DIR)) {
-  if (!f.endsWith('.cpp') || f === 'splash.cpp') continue;
-  const txt = stripComments(fs.readFileSync(path.join(SRC_DIR, f), 'utf8'));
-  for (const m of txt.matchAll(/splash_mini_create\s*\([^,]+,\s*"([^"]+)"/g)) direct.push([f, m[1]]);
-}
-// Animations named by #define rather than inline (opening, celebration).
-const defines = [...stripComments(splash).matchAll(/#define\s+(SPLASH_\w*ANIM)\s+"([^"]+)"/g)]
-  .map(m => [m[1], m[2]]);
-
-// --- report ------------------------------------------------------------------
 let fatal = 0;
+const require_ = name => {
+  if (builtSet.has(name)) return name;
+  fatal++;
+  return `${name}  <-- NOT IN BUILD`;
+};
+
 console.log(`${built.length} animations in the build\n`);
 
 groups.forEach((g, i) => {
-  const marks = g.map(n => {
-    if (builtSet.has(n)) return n;
-    fatal++;
-    return `${n}  <-- NOT IN BUILD`;
-  });
-  console.log(`group ${i} (${g.length}/9): ${marks.join(', ')}`);
+  console.log(`group ${i} (${g.length}/9): ${g.map(require_).join(', ')}`);
 });
 
-const named = new Set([...groups.flat(), ...direct.map(d => d[1]), ...defines.map(d => d[1])]);
+if (direct.length || defs.length) console.log('');
+direct.forEach(d => console.log(`${d.file} names "${require_(d.name)}" directly`));
+defs.forEach(d => console.log(`${d.macro} = "${require_(d.name)}"`));
 
-if (direct.length || defines.length) console.log('');
-direct.forEach(([f, n]) => {
-  const ok = builtSet.has(n);
-  if (!ok) fatal++;
-  console.log(`${f} names "${n}" directly${ok ? '' : '  <-- NOT IN BUILD'}`);
-});
-defines.forEach(([d, n]) => {
-  const ok = builtSet.has(n);
-  if (!ok) fatal++;
-  console.log(`${d} = "${n}"${ok ? '' : '  <-- NOT IN BUILD'}`);
-});
-
-const orphans = built.filter(n => !named.has(n));
+const named = new Set([...groups.flat(), ...direct.map(d => d.name), ...defs.map(d => d.name)]);
+const orphans = built.filter(a => !named.has(a.name));
 if (orphans.length) {
   console.log(`\n${orphans.length} in the build that nothing picks (fine if deliberate):`);
-  orphans.forEach(n => console.log(`  ${n}`));
+  orphans.forEach(a => console.log(`  ${a.name}`));
 }
 
 console.log('');

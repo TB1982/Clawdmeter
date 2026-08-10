@@ -148,10 +148,42 @@ Reads `tools/claudepix_data/*.json`, `tools/custom_anims/*.json` and
 
 The firmware (`splash.cpp`) consumes this header to render and animate.
 
+## 4. Sync everything
+
+Converting is one of four things that have to happen together, so there is one
+command for all of them:
+
+```bash
+node sync_animations.js
+```
+
+| step | |
+|---|---|
+| `convert_to_c.js` | animations → `firmware/src/splash_animations.h` |
+| `build_editor_samples.js` | animations → the samples embedded in `anim_editor.html` |
+| `gen_catalogue.js` | firmware → [`docs/animation-catalogue.md`](../docs/animation-catalogue.md) |
+| `check_groups.js` | every name the firmware asks for resolves to something |
+
+It stops at the first failure and exits non-zero, so it can be chained in front
+of a build.
+
+Doing three of the four is the easy mistake, and each omission fails quietly in
+its own way. Skip the samples and the device and the web editor disagree about
+which animations exist. Skip the catalogue and the docs describe a device that
+no longer exists. Skip the check and an animation can be compiled into the build
+and picked by nothing — which looks identical to a working one when you cycle to
+it by hand with the `next` serial command.
+
+`docs/animation-catalogue.md` is generated from the firmware sources rather than
+maintained by hand, for the same reason: a list of what ships and in what order
+is wrong the first time someone reorders a group and forgets, and a list that is
+wrong is worse than none, because it gets believed.
+
 ## Re-running
 
 The scraper is idempotent — re-run any time the source library updates. The
-converter overwrites the header. Rebuild firmware after running both.
+converter overwrites the header. Run `sync_animations.js` after either, then
+rebuild the firmware.
 
 ## License note
 
