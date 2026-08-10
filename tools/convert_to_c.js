@@ -23,21 +23,19 @@ const IN_DIRS = opt('--in', ['claudepix_data', 'custom_anims', 'drawn_anims'].jo
 const OUT_FILE = path.resolve(opt('--out',
   path.join(__dirname, '..', 'firmware', 'src', 'splash_animations.h')));
 
-// Raised from 10 to 16. Nothing in the firmware hardcodes it — splash.cpp
+// Both now live in tools/lib/format.js, which is the only copy the Node tools
+// share. Nothing in the firmware hardcodes the palette size — splash.cpp
 // bounds-checks against SPLASH_PALETTE_SIZE, which is emitted from here, and
-// cells are uint8_t. The cost is PALETTE_SIZE * 2 bytes per animation against
-// 400 bytes per frame, so it rounds to nothing. Files with fewer entries stay
-// valid; the rest of the array is zero-filled.
-const PALETTE_SIZE = 16;
-
-// Grid sides the pipeline accepts, smallest first. Square only: splash.cpp
-// centres a square canvas on the panel by design, so a non-square animation
-// would have to letterbox or distort, and it would stop being portable across
-// the six boards. Keep this list short — every entry is a size the firmware has
-// to render and somebody has to look at on hardware. 40 earns its place by
-// being exactly 2x: a 20x20 animation upscales into it with each cell becoming
-// a 2x2 block, so it looks identical on screen and can then be refined.
-const GRID_SIZES = [20, 40];
+// cells are uint8_t. Files with fewer entries stay valid; the rest of the array
+// is zero-filled.
+//
+// GRID_SIZES is square-only because splash.cpp centres a square canvas on the
+// panel by design, so a non-square animation would have to letterbox or
+// distort and would stop being portable across the six boards. 40 earns its
+// place by being exactly 2x: a 20x20 animation upscales into it with each cell
+// becoming a 2x2 block, so it looks identical on screen and can then be
+// refined.
+const {PALETTE_SIZE, GRID_SIZES} = require('./lib/format.js');
 
 // Animations that stay in the source directories — so they keep working as
 // editor samples and as bases for make_custom_anims.js — but are not emitted

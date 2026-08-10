@@ -27,7 +27,7 @@
   "@type": "WebApplication",
   "name": "Clawdmeter animation editor",
   "url": "https://tb1982.github.io/Clawdmeter/tools/anim_editor.html",
-  "description": "A browser-based pixel-art editor for the Clawdmeter ESP32 splash screen: 20×20 and 40×40 grids, a 16-colour cap, per-frame hold times, onion skin, and previews at device scale on black.",
+  "description": "A browser-based pixel-art editor for the Clawdmeter ESP32 splash screen: 20×20 and 40×40 grids, a 36-colour cap, per-frame hold times, onion skin, and previews at device scale on black.",
   "applicationCategory": "DesignApplication",
   "operatingSystem": "Any browser",
   "browserRequirements": "Requires JavaScript. No install, no server.",
@@ -135,7 +135,7 @@
   .row + .row { margin-top: 8px; }
   #grid { image-rendering: pixelated; cursor: crosshair; touch-action: none;
           border: 1px solid var(--line); background: #000; display: block; }
-  /* Ten columns, not PALETTE_MAX. The cap is 16, but sixteen swatches across a
+  /* Ten columns, not PALETTE_MAX. The cap is 36, and thirty-six swatches across a
      300px column would be 14px each — smaller than the delete badge sitting on
      them. Ten keeps the swatch at a clickable size and lets the grid flow onto
      a second row only once a palette actually passes ten, so every animation
@@ -200,7 +200,7 @@
 <div class="titlebar">
   <h1 data-i18n="title">Clawdmeter 動畫編輯器</h1>
   <select id="lang" aria-label="Language"></select>
-  <p class="sub" data-i18n-html="sub">20×20 · 最多 16 色 · 每格獨立停留時間 · 匯出可直接丟進 <code>tools/drawn_anims/</code></p>
+  <p class="sub" data-i18n-html="sub">20×20 · 最多 36 色 · 每格獨立停留時間 · 匯出可直接丟進 <code>tools/drawn_anims/</code></p>
 </div>
 
 <div class="wrap">
@@ -379,7 +379,7 @@
 // SPLASH_PALETTE_SIZE — a bigger palette can't be represented on the device.
 // Keep this in step with PALETTE_SIZE in tools/convert_to_c.js; the converter
 // rejects a file that exceeds it rather than silently dropping colours.
-const PALETTE_MAX = 16;
+const PALETTE_MAX = 36;
 
 // How long one animation holds the splash before the device rotates to the
 // next one in its rate group. Keep in step with SPLASH_ROTATE_INTERVAL_MS in
