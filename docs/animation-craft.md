@@ -56,6 +56,42 @@ scrolling sines of unrelated period. The edge then *travels*. Displacing it with
 per-frame random noise instead makes it boil, which reads as television static.
 *(2026-08-09)*
 
+**The rain, the wave and the fire are the same generator.** Solid fill, with the
+boundary carrying all the texture, displaced by two or three sines whose periods
+share no common factor. Only the output changes: rain drives where a drop lands,
+water drives surface height, fire drives the height of each flame tongue.
+
+Two constraints make it work. Periods that *are* related let the pattern repeat
+within a few cells and the eye names it as machine-drawn immediately. And every
+time term must complete a whole number of cycles across the frame count, or the
+loop has a visible seam at the wrap. Checkable after the fact: count the cells
+that change from the last frame back to the first and compare it with the
+ordinary steps. `this is fine` wraps at 67 against 47–85, so there is no seam.
+*(2026-08-10)*
+
+**A flame has two ways to stop being a flame, and they are opposite.** Both were
+hit while generating the fire for `this is fine`, in that order.
+
+Modelled as a height field with everything under it filled, fire reads as a slab
+of gold. On black at 20 cells the gaps between tongues are as much of the fire as
+the tongues; fill them and there is no flame left, only a bright region. Two
+attempts died this way and the second also swallowed the creature's legs, leaving
+a torso hovering over the floor.
+
+The fix — steepening the falloff so black reappeared between tongues — overshot
+into the opposite failure. At a falloff of 4.3 rows per column a tongue 4.2 tall
+loses everything one column out, so only its centre column survives: a one-cell
+vertical stick. **43% of the generated flame components were sticks three or more
+cells tall and one cell wide.** Nova redrew them as tapering triangles by hand and
+that fell to 2%.
+
+The rule is a minimum footprint, the same family as the 3×3 heart and the d=5
+circle: **a flame is at least three cells wide at its base**, which bounds the
+falloff at `2 × height / 3`. Four of the five floor tongues broke it; the two
+tall ones at the walls did not, which is why the sticks were all along the floor.
+Gaps come from *fewer tongues spaced further apart*, never from sharpening each
+one. *(Nova, 2026-08-10)*
+
 ---
 
 ## What the tools can and cannot tell you
@@ -98,6 +134,21 @@ By the second measure `bounce dj` is the *better* animation. The actual answer �
 djmix has a mixing desk and the other two have nothing under them — was visible
 in the contact sheet the whole time. Measure after looking, not instead of.
 *(2026-08-09)*
+
+**A measurement can be of the wrong thing and still return a number.** Nova said
+the generated fire sometimes came out as a single vertical line. Checking that by
+histogramming the width of each horizontal run of flame cells gave 67% one-cell
+runs in the generated version against 61% in her corrected one — no signal, and
+it would have been easy to read as "the change was cosmetic".
+
+The metric was wrong. Every flame tapers, so the top row of a perfectly good
+triangle is one cell wide and lands in the same bucket as a stick. Measuring
+connected components instead — height, and width at the base — separated them at
+once: 43% against 2%.
+
+This is the companion to the entry above. There, three metrics were computed and
+none addressed the question. Here one metric was computed, addressed a question,
+and it was not the question that had been asked. *(2026-08-10)*
 
 ---
 
@@ -308,3 +359,20 @@ Both of these compile, ship, and look like nothing is wrong:
 
 `GROUP_MAX` is 9 and group 0 was full as of 2026-08-09, so adding there is a
 displacement decision rather than an append.
+
+The second of these came within one step of biting twice in two days, so it is
+now checkable rather than remembered:
+
+```bash
+node tools/check_groups.js
+```
+
+It compares what is in `splash_animations.h` against every name the firmware asks
+for by literal string — the rate groups, the `splash_mini_create()` calls in the
+other `.cpp` files, and the `SPLASH_*_ANIM` defines — and exits non-zero if any of
+them resolve to nothing. It also lists animations that are in the build and picked
+by nothing, which is legitimate (`dance bob` and `work type` are deliberate) but
+should be a decision rather than an accident.
+
+What it cannot check is the first trap: a duplicate name is not an error to the
+converter, it is the override mechanism. *(2026-08-10)*
