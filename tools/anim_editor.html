@@ -297,6 +297,14 @@
                    <!-- Not data-i18n: the per-cell figure changes with the grid
                         size, so these are written by syncSizeUI(). -->
                    <div class="cap" id="cap-splash">全螢幕 splash · 每格 24px</div></div>
+              <!-- The usage screen's waiting panel. Shown at its true size on a
+                   480x480 board (ui.cpp sets idle_px to 160; smaller panels get
+                   96), because an animation drawn for that slot is never once
+                   seen at splash scale and judging it at 24px/cell would be
+                   judging a view it does not have. -->
+              <div><canvas id="pv-wait" width="160" height="160"
+                   style="width:160px;height:160px"></canvas>
+                   <div class="cap" id="cap-wait">等待面板 · 每格 8px</div></div>
               <div class="badgerow">
                 <div><canvas id="pv-badge" width="80" height="80"
                      style="width:80px;height:80px"></canvas>
@@ -425,6 +433,7 @@ const I18N = {
   selHint: '方向鍵推一格 · Esc 放下 · 複製後可貼到別的影格',
   previewH: '實機預覽（黑底，裝置實際尺寸）',
   capSplash: '全螢幕 splash · 每格 {px}px', capBadge: '角落徽章 · 每格 {px}px',
+  capWait: '等待面板 · 每格 {px}px（小板子是 96px，每格更小）',
   palH: '這支動畫的顏色', pickH: '選色',
   pickHint: '點一下就加進上面並選取。已經在用的會直接選取。', addColour: '加入',
   framesH: '影格', frameHint: '沒有選取範圍時，← → 可以快速切換影格',
@@ -486,6 +495,7 @@ const I18N = {
   selHint: 'Arrows nudge a cell · Esc puts it down · copy to paste into another frame',
   previewH: 'On-device preview (black, actual size)',
   capSplash: 'Full splash · {px}px per cell', capBadge: 'Corner badge · {px}px per cell',
+  capWait: 'Waiting panel · {px}px per cell (96px on smaller boards, so smaller still)',
   palH: "This animation's colours", pickH: 'Colours',
   pickHint: 'Click to add and select. Already in use selects directly.', addColour: 'Add',
   framesH: 'Frames', frameHint: 'With nothing selected, ← → step through frames',
@@ -547,6 +557,7 @@ const I18N = {
   selHint: '矢印キーで1マス移動 · Escで確定 · コピーすれば他のコマにも貼れます',
   previewH: '実機プレビュー（黒背景・実寸）',
   capSplash: '全画面スプラッシュ · 1マス{px}px', capBadge: '隅のバッジ · 1マス{px}px',
+  capWait: '待機パネル · 1マス{px}px（小型ボードは96pxでさらに小さい）',
   palH: 'このアニメーションの色', pickH: '色を選ぶ',
   pickHint: 'クリックで上に追加して選択。使用中の色はそのまま選択されます。', addColour: '追加',
   framesH: 'コマ', frameHint: '選択範囲がないときは ← → でコマを切り替えられます',
@@ -608,6 +619,7 @@ const I18N = {
   selHint: '方向键推一格 · Esc 放下 · 复制后可粘贴到别的帧',
   previewH: '真机预览（黑底，设备实际尺寸）',
   capSplash: '全屏 splash · 每格 {px}px', capBadge: '角落徽章 · 每格 {px}px',
+  capWait: '等待面板 · 每格 {px}px（小板子是 96px，每格更小）',
   palH: '这支动画的颜色', pickH: '选色',
   pickHint: '点一下就加进上面并选取。已经在用的会直接选取。', addColour: '加入',
   framesH: '帧', frameHint: '没有选取范围时，← → 可以快速切换帧',
@@ -899,9 +911,10 @@ function adoptGridSize(n) {
 function syncSizeUI() {
   const s = $('gridsize');
   if (s) s.value = String(N);
-  const cap = $('cap-splash'), capB = $('cap-badge');
+  const cap = $('cap-splash'), capB = $('cap-badge'), capW = $('cap-wait');
   if (cap)  cap.textContent  = t('capSplash', {px: CANVAS_PX / N});
   if (capB) capB.textContent = t('capBadge',  {px: 80 / N});
+  if (capW) capW.textContent = t('capWait',   {px: 160 / N});
   // The strapline states the grid side, so it is re-rendered here rather than
   // only on a language change.
   const sub = document.querySelector('[data-i18n-html="sub"]');
@@ -1061,9 +1074,9 @@ grid.addEventListener('pointerup', () => { drawing = false; selDrag = null; });
 // panel will actually show. A colour that looks fine on white can vanish here,
 // and a shape that reads at 24px can turn to mush at 4px.
 // The per-cell size is derived from the canvas rather than passed in: every
-// preview here is a fixed physical size on the device (480px splash, 80px
-// badge, 40px thumbnail), so growing the grid makes the cells smaller, not the
-// preview bigger. That is exactly what the panel does.
+// preview here is a fixed physical size on the device (480px splash, 160px
+// waiting panel, 80px badge, 40px thumbnail), so growing the grid makes the
+// cells smaller, not the preview bigger. That is exactly what the panel does.
 function paintPreview(canvas, frameIdx) {
   const cx = canvas.getContext('2d');
   const cell = canvas.width / N;
@@ -1356,6 +1369,7 @@ $('f-right').onclick = () => { selCommit(); if (cur === frames.length-1) return;
 let playTimer = null, playIdx = 0;
 function step() {
   paintPreview($('pv-splash'), playIdx);
+  paintPreview($('pv-wait'), playIdx);
   paintPreview($('pv-badge'), playIdx);
   const hold = frames[playIdx].hold;
   playIdx = (playIdx + 1) % frames.length;
@@ -1573,7 +1587,7 @@ $('copy').onclick = async () => {
 // ── go ───────────────────────────────────────────────────────────────────────
 function renderAll() {
   paintGrid(); renderFrames(); renderPalette();
-  if (!playing) { paintPreview($('pv-splash'), cur); paintPreview($('pv-badge'), cur); }
+  if (!playing) { paintPreview($('pv-splash'), cur); paintPreview($('pv-wait'), cur); paintPreview($('pv-badge'), cur); }
 }
 // ── tab icon ─────────────────────────────────────────────────────────────────
 // Drawn from TEMPLATE at load rather than shipped as a file, so the editor
