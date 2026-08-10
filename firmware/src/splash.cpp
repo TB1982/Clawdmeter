@@ -85,9 +85,11 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // twitch, no keyboard and no surface — there is nothing in it to read as
     // typing. It's one of the two animations the claudepix site never lists,
     // which is probably the same judgement. "work out" takes its slot.
-    // "idle look around" is the one name here that is not free to leave: the
-    // usage screen hands it to splash_mini_create() by literal string, so
-    // EXCLUDE-ing it would leave that corner blank whatever the groups say.
+    // "idle look around" used to be un-retirable because the usage screen named
+    // it directly; as of 2026-08-10 that screen asks for "waiting" instead, so
+    // this entry is now an ordinary group slot like any other. The constraint
+    // moved with the name, not away: whatever ui.cpp names by literal string
+    // cannot be EXCLUDE-d, and node tools/check_groups.js is what notices.
     { "idle look around", "work think", "work coding", "work out" },
     // Group 2 — active. "dance bob" is absent for the same reason work type is:
     // four frames, the other of the two the claudepix site never lists. It's
