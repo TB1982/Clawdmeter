@@ -3,6 +3,7 @@
 #include <lvgl.h>
 #include <time.h>
 #include "logo.h"
+#include "clawd_still.h"
 #include "icons.h"
 #include "hal/board_caps.h"
 
@@ -571,8 +572,13 @@ void ui_init(void) {
     lv_obj_set_style_bg_color(scr, COL_BG, 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-    if (L.small_icons) init_icon_dsc_rgb565a8(&logo_dsc, LOGO_SMALL_WIDTH, LOGO_SMALL_HEIGHT, logo_small_data);
-    else               init_icon_dsc_rgb565a8(&logo_dsc, LOGO_WIDTH, LOGO_HEIGHT, logo_data);
+    // The corner icon is the official Clawd still (clawd_still.h, imported from
+    // upstream) rather than the old 80x80 spark logo. The old one squeezed him
+    // into a square; he is 24x16 cells, so a square slot has to squash him and
+    // he read as flattened. This art is cropped to that 24x16 bbox at 3 px/cell
+    // (2 px/cell on small panels), which is why it is 72x48 rather than 80x80.
+    if (L.small_icons) init_icon_dsc_rgb565a8(&logo_dsc, CLAWD_STILL_SMALL_W, CLAWD_STILL_SMALL_H, clawd_still_small_data);
+    else               init_icon_dsc_rgb565a8(&logo_dsc, CLAWD_STILL_W, CLAWD_STILL_H, clawd_still_data);
     init_battery_icons();
 
     init_usage_screen(scr);
@@ -582,9 +588,22 @@ void ui_init(void) {
         lv_obj_add_event_cb(splash_get_root(), global_click_cb, LV_EVENT_CLICKED, NULL);
     }
 
+    // The still Clawd is shorter than the 80/40 px slot the spark logo filled,
+    // so centre it vertically in that slot rather than leaving it hanging from
+    // the top.
+    //
+    // logo.h is still included, but only for LOGO_*_WIDTH/HEIGHT: those remain
+    // the slot, and the animated corner creature below still fills it, because
+    // that one renders a whole square animation grid. Its pixel data is now
+    // unreferenced and the linker drops it, which is why swapping an 80x80
+    // icon for a 72x48 one made the build 9 KB *smaller*.
+    const int logo_slot_h = L.small_icons ? LOGO_SMALL_HEIGHT : LOGO_HEIGHT;
+    const int logo_art_h  = L.small_icons ? CLAWD_STILL_SMALL_H : CLAWD_STILL_H;
+    const int logo_top    = L.logo_y + (logo_slot_h - logo_art_h) / 2;
+
     logo_img = lv_image_create(scr);
     lv_image_set_src(logo_img, &logo_dsc);
-    lv_obj_set_pos(logo_img, L.margin, L.logo_y);
+    lv_obj_set_pos(logo_img, L.margin, logo_top);
 
     // Corner creature: same slot and size as the logo, but animated and tracking
     // the usage rate (NULL name = follow usage_rate_group()). It only stands in
