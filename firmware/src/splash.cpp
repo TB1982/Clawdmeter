@@ -66,51 +66,39 @@ static int8_t  group_lists[GROUP_COUNT][GROUP_MAX];
 static uint8_t group_size[GROUP_COUNT] = {0};
 static uint8_t group_rotation[GROUP_COUNT] = {0};
 
+// 2026-08-12: every claudepix animation left these lists and the build on the
+// same day (see EXCLUDE in tools/convert_to_c.js for the list and the reason).
+// What is left is the ten Nova drew. Groups 1 and 2 are down to one entry each
+// and will stay thin until the official Anthropic art is imported — a group
+// with one entry does not rotate, it just holds. That is deliberate and
+// temporary; a group with *zero* entries would be worse but still safe,
+// because pick_rate_anim() returns NULL on group_size == 0 rather than
+// dividing by it.
 static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // Group 0 — idle / sleepy. Order is playback order: pick_rate_anim() walks
     // the list one entry every SPLASH_ROTATE_INTERVAL_MS, so slot 0 is what you
-    // meet at boot and the last slot is what loops back into it. Pairs are
-    // deliberate: "hanabi" follows "swim summer" so the two summer scenes play
-    // back to back — the rubber ring, then the fireworks — and "space" closes
-    // the round because he gives the OK in "expression wink" and then flies
-    // off, which restarts with him home again in the hearts.
-    // Trimmed 2026-08-09 from nine to seven: "idle breathe", "idle blink" and
-    // "expression sleep" are gone from the build entirely (see EXCLUDE in
-    // convert_to_c.js), which is why the run no longer ends on him asleep.
-    // "space" took it back to eight.
-    { "idle hearts", "swim summer", "hanabi", "rainy days", "idle blossom",
-      "fm listening", "expression wink", "space", NULL },
-    // Group 1 — normal pace. "work type" is deliberately absent: it exists in
-    // splash_anims[] but nothing picks it. Four frames, four pixels of arm
-    // twitch, no keyboard and no surface — there is nothing in it to read as
-    // typing. It's one of the two animations the claudepix site never lists,
-    // which is probably the same judgement. "work out" takes its slot.
-    // "idle look around" used to be un-retirable because the usage screen named
-    // it directly; as of 2026-08-10 that screen asks for "waiting" instead, so
-    // this entry is now an ordinary group slot like any other. The constraint
-    // moved with the name, not away: whatever ui.cpp names by literal string
-    // cannot be EXCLUDE-d, and node tools/check_groups.js is what notices.
-    { "idle look around", "work think", "work coding", "work out" },
-    // Group 2 — active. "dance bob" is absent for the same reason work type is:
-    // four frames, the other of the two the claudepix site never lists. It's
-    // been redrawn past recognition as "swim summer", which sits in the idle
-    // group instead — floating in a rubber ring is not an active state.
-    // "work mode" retired "dance sway" here on 2026-08-09; it is the one
-    // animation built to fill a whole slot in a single pass, so its walk-in
-    // plays once instead of three times and is never cut part-way.
-    { "work mode", "expression surprise", "dance bounce" },
+    // meet at boot and the last slot is what loops back into it. The summer
+    // pair is deliberate and survived the cull intact: "hanabi" follows "swim
+    // summer" so the rubber ring runs straight into the fireworks.
+    // Lost here on 2026-08-12: "idle hearts", "idle blossom", "fm listening"
+    // (Nova's props over claudepix animation) and "expression wink".
+    { "swim summer", "hanabi", "rainy days", "space", NULL },
+    // Group 1 — normal pace. Down to one: "idle look around" was the untouched
+    // claudepix scrape, and "work think" and "work coding" were claudepix
+    // animations Nova had redrawn but not replaced.
+    { "work out", NULL },
+    // Group 2 — active. Down to one. "work mode" is the one animation built to
+    // fill a whole slot in a single pass, so its walk-in plays once instead of
+    // three times and is never cut part-way — which makes it the least bad
+    // animation to be alone in a group, since a lone entry repeats forever.
+    { "work mode", NULL },
     // Group 3 — heavy. "surfing" leads it from 2026-08-09: at the busiest rate
     // you are not driving, the wave is carrying you, which is a more honest
     // thing for this band to say than a third animation of him dancing.
-    // It retired "dance sway dj", the weakest of the three by measurement —
-    // slowest loop in the busiest group, and 53% of its motion was sparkles in
-    // empty space rather than anything happening to him.
-    // "this is fine" retired "dance bounce dj" on 2026-08-10 and finishes the
-    // thought: the three left are a wave carrying him, a room burning around
-    // him, and a desk he is standing at. All three have something under him.
-    // The two DJ animations that went had him in mid-air, which is what Nova
-    // could see was wrong about them long before any of us could say why.
-    { "surfing", "this is fine", "dance djmix", NULL },
+    // "this is fine" joined on 2026-08-10. Both have something under him, which
+    // is what was wrong with the three DJ animations that used to be here and
+    // what Nova could see long before any of us could say why.
+    { "surfing", "this is fine", NULL },
 };
 
 static bool groups_resolved = false;
@@ -147,8 +135,14 @@ static bool opening_pending = true;   // static init: true exactly once per boot
 static bool cur_is_opening = false;
 
 // ---- Celebration: a short override that outranks the rate groups. ----
+//
+// "dance djmix" held this until 2026-08-12, when it left the build with the
+// rest of the claudepix material. "hanabi" is a better fit than the thing it
+// replaces, not a fallback: fireworks are already what a celebration looks
+// like, it is Nova's own, and its 10,000 ms loop divides the 20,000 ms
+// rotation slot exactly, so a celebration never cuts it off mid-burst.
 #define SPLASH_CELEBRATE_MS   30000
-#define SPLASH_CELEBRATE_ANIM "dance djmix"
+#define SPLASH_CELEBRATE_ANIM "hanabi"
 
 static uint32_t celebrate_until_ms = 0;
 

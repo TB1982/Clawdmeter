@@ -128,10 +128,16 @@ characters or a scene change.
 
 ## Iterating on an existing animation
 
-This is the normal case, not the exception. Of the 17 files in
-`tools/drawn_anims/`, **14 replace an animation that already existed** and only
-three are new. Most of the work on this catalogue has been fixing, and you should
-expect to be doing that more often than drawing.
+**This used to be the normal case and is no longer.** Of the 24 files in
+`tools/drawn_anims/`, 14 replace a claudepix animation and 10 are new — but on
+2026-08-12 every claudepix animation, and every correction to one, was excluded
+from the firmware (`EXCLUDE` in `tools/convert_to_c.js`). The device now
+carries the 10 originals, with Anthropic's official art to fill the rest.
+
+So fixing a scraped animation is now archaeology, not the job. The techniques
+below still apply — they are about reading an animation before changing it,
+which is as true of your own work as of somebody else's — but the default task
+is drawing an original or importing official art, not correcting claudepix.
 
 **Measure before you redraw.** The contact sheet is necessary and not sufficient.
 There is a whole class of defect it cannot show, because a frame identical to the
@@ -313,11 +319,18 @@ Two consequences worth knowing before editing it:
 ## Attribution
 
 This repository holds no rights in what it renders. The creature is Anthropic's
-character; the animation catalogue is adapted from
-[claudepix](https://claudepix.vercel.app) by
-[@amaanbuilds](https://x.com/amaanbuilds), which states no license. See the
-license note in `tools/README.md`.
+character.
 
-Practically: an animation that poses the existing creature is derivative of both
-and inherits that posture. Do not add a license header, and do not describe
-output here as original work.
+The animation catalogue **was** adapted from
+[claudepix](https://claudepix.vercel.app) by
+[@amaanbuilds](https://x.com/amaanbuilds), which states no license. As of
+2026-08-12 none of that material is compiled into the firmware — it stays in
+`tools/claudepix_data/`, `tools/custom_anims/` and `tools/drawn_anims/` as
+editor samples and as bases for `make_custom_anims.js`, but the device carries
+Nova's own drawings and Anthropic's official art. See the license note in
+`tools/README.md`.
+
+Practically: an animation that poses the existing creature is derivative and
+inherits that posture, whether the pose came from claudepix or from the
+official art. Do not add a license header, and do not describe output here as
+original work.
