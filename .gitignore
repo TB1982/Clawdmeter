@@ -25,6 +25,17 @@ tools/package-lock.json
 # Contact sheets from tools/preview_anim.js — regenerate, don't commit
 tools/preview/
 
+# Official Clawd art imported by tools/import_official.js. Not committed for
+# two reasons: it is Anthropic's, and it is one command away from upstream's
+# own copy, so committing it would be redistributing art to save nothing.
+# Edited derivatives belong in tools/drawn_anims/ like any other drawing.
+tools/official_anims/
+
+# macOS makes " 2"/" 3" copies of files when iCloud syncs a directory that git
+# is writing to, and Documents/ is synced by default. They are untracked, they
+# are stale, and PlatformIO compiles them — 64 duplicate symbols at link time.
+*\ [0-9].*
+
 # Mac daemon venv
 daemon/.venv/
 

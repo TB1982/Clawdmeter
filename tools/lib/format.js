@@ -30,6 +30,23 @@ const PALETTE_SIZE = 36;
 
 // Grid sides the pipeline accepts, smallest first. Square only: splash.cpp
 // centres a square canvas on the panel by design.
-const GRID_SIZES = [20, 40];
+//
+// Every side here is a whole multiple of 20, which is what makes growing an
+// animation free: each cell becomes an n x n block, nothing moves, and it looks
+// identical on the panel until it is refined. 32 or 48 would need interpolation
+// — that is a redraw, not a resize.
+//
+// 60 was added on 2026-08-12, after upstream moved to a 60x60 stage. Two
+// reasons, and the second is the real one:
+//   - it makes their art importable (tools/import_official.js), and
+//   - at 480px it is 8px per cell against 24, so the same screen area holds 9x
+//     the cells. That is detail, not a smaller picture — the mistake the stage
+//     invites is treating the extra cells as margin.
+// Note 40 and 60 do not divide each other; resampling between them has to go
+// via 20, and 40 -> 20 throws detail away.
+//
+// Cost: a frame is side*side bytes, so 60x60 is 3600 against 400. A 25-frame
+// animation goes from 10 KB to 90 KB of flash. Fine for a few, not for all.
+const GRID_SIZES = [20, 40, 60];
 
 module.exports = {PALETTE_SIZE, GRID_SIZES};
