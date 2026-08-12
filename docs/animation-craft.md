@@ -276,6 +276,23 @@ The palette cap is 16 (raised from 10 on 2026-08-08). Most animations use 3–8.
 Everything is quantised to RGB565 on the device, so two hexes can collapse to the
 same value; `preview_anim.js` shows them quantised for that reason.
 
+**Raised again to 36 on 2026-08-11**, which is the ceiling rather than a
+preference — `build_editor_samples.js` packs one cell into one base-36
+character, so index 35 is the last that survives a round trip. `hanabi` had used
+all sixteen and all sixteen were doing work, which is the signal to move a cap:
+not that one is full, but that it is full and nothing in it is spare.
+
+The distribution at the time, across 28 animations: median 9 entries, one at 16,
+four at 3. So the cap was binding on exactly one animation. Raising it costs
+`PALETTE_SIZE × 2` bytes per animation — about 900 bytes across the catalogue,
+against 400 bytes for a single frame — and buys nothing for the other 27.
+Cheap and narrow is still the right trade when the one it unblocks is the one
+being drawn.
+
+What does *not* change is that colour is rarely the binding constraint here.
+Cells are. A dark colour still vanishes on black and dithering still does not
+survive 20 cells, however many entries the palette has. *(Nova, 2026-08-11)*
+
 ---
 
 ## Composition
@@ -331,7 +348,8 @@ Body occupies rows 5–18 and columns 3–17 as he breathes. What is free on
 His axis is column 10 — his hands sit at 3 and 17, not 3 and 16.
 
 Catalogue ranges as of 2026-08-09: 4–31 frames (typically 12–24), holds 60–2400
-ms, palettes 3–16 entries, creature-only footprint 15×13 to 19×17 inside the
+ms, palettes 3–16 entries (median 9; the cap moved to 36 on 2026-08-11 but
+nothing has spent it yet), creature-only footprint 15×13 to 19×17 inside the
 20×20 grid.
 
 **A full-size creature leaves no room for scenery.** `surfing` as first drawn

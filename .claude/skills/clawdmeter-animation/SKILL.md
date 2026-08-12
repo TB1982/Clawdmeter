@@ -48,13 +48,14 @@ device reading past the end of an array.
 
 - **`name`** — required, lowercase words with spaces. It is the identity used
   everywhere else. See *Naming* below before you pick one.
-- **`palette`** — 1 to 16 entries. Index 0 is `"transparent"` by convention and
+- **`palette`** — 1 to 36 entries (the cap lives in `tools/lib/format.js`).
+  Index 0 is `"transparent"` by convention and
   becomes black, which is the panel's own colour. Hex strings otherwise.
 - **`grid`** — every frame must be the same side, and the side must be 20.
   (`convert_to_c.js` also accepts 40, but no 40x40 animation has been verified
   on the two ESP32-C6 boards — they have no PSRAM and take a different render
   path. Author 20x20 unless the user explicitly asks for 40 and accepts that.)
-- **Cell values** must satisfy `0 <= v < palette.length`. Not `< 16` — an index
+- **Cell values** must satisfy `0 <= v < palette.length`. Not `< 36` — an index
   into a declared entry. Declaring three colours and using index 3 fails.
 - **`hold`** — a positive number of milliseconds, per frame.
 

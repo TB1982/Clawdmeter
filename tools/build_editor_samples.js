@@ -67,6 +67,37 @@ if (i < 0 || j < 0) {
   process.exit(1);
 }
 
+// The editor cannot require() lib/format.js — it has to open from file:// as a
+// single document with no server, which is the property the whole thing is
+// built around. So it keeps its own copies and this is where they are checked.
+// The last time a copy drifted, two importers spent three days rejecting valid
+// drawings with a message that read like a rule.
+const {PALETTE_SIZE, GRID_SIZES} = require('./lib/format.js');
+const declared = {
+  PALETTE_MAX: (html.match(/const PALETTE_MAX = (\d+);/) || [])[1],
+  GRID_SIZES:  (html.match(/const GRID_SIZES = \[([^\]]*)\];/) || [])[1],
+};
+const want = {PALETTE_MAX: String(PALETTE_SIZE), GRID_SIZES: GRID_SIZES.join(', ')};
+for (const k of Object.keys(want)) {
+  if (declared[k] === undefined) {
+    console.error(`Could not find ${k} in ${path.basename(EDITOR)}; nothing was written.`);
+    process.exit(1);
+  }
+  if (declared[k].replace(/\s+/g, ' ').trim() !== want[k]) {
+    console.error(`${path.basename(EDITOR)} has ${k} = ${declared[k]}, tools/lib/format.js says ${want[k]}.`);
+    console.error('Update the editor to match, then re-run. Nothing was written.');
+    process.exit(1);
+  }
+}
+
+// One base-36 character per cell below, so an index past 35 would encode as two
+// characters and every sample after it would decode as garbage.
+if (PALETTE_SIZE > 36) {
+  console.error(`PALETTE_SIZE is ${PALETTE_SIZE}; the base-36 packing here tops out at 36.`);
+  console.error('Change the packing (and the reader in anim_editor.html) first. Nothing was written.');
+  process.exit(1);
+}
+
 const payload = '[\n' + anims.map(a =>
   `{n:${JSON.stringify(a.n)},c:${JSON.stringify(a.c)},p:${JSON.stringify(a.p)},f:[` +
   a.f.map(f => `{h:${f.h},g:${JSON.stringify(f.g)}}`).join(',') + ']}'

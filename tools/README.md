@@ -38,7 +38,7 @@ Override URL or output dir with `--base` and `--out`.
 disk — one file, no dependencies, no server, nothing fetched.
 
 It carries what the firmware cares about rather than what a general pixel editor
-offers: the grid sizes the pipeline accepts and the 16-colour cap enforced,
+offers: the grid sizes the pipeline accepts and the 36-colour cap enforced,
 per-frame hold times, onion skin,
 playback at the real holds, and both device previews on black (24px/cell splash,
 4px/cell corner badge). A colour that looks fine on white can vanish on the

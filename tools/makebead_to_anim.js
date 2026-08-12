@@ -25,7 +25,9 @@ const fs = require('fs');
 const path = require('path');
 
 const GRID = 20;
-const PALETTE_MAX = 10;             // firmware SPLASH_PALETTE_SIZE; slot 0 is empty
+// Shared with convert_to_c.js and the rest — this file sat at 10 for three
+// days after the cap moved to 16, silently refusing valid drawings.
+const {PALETTE_SIZE: PALETTE_MAX} = require('./lib/format.js');
 const BRAND_TERRACOTTA = '#D97757';
 const MAKEBEAD_ORANGE = '#FF8000';
 

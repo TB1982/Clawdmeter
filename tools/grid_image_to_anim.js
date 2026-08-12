@@ -34,7 +34,9 @@ const path = require('path');
 const zlib = require('zlib');
 
 const GRID_DEFAULT = 20;
-const PALETTE_MAX = 10;   // firmware's SPLASH_PALETTE_SIZE; slot 0 is empty
+// Shared with convert_to_c.js and the rest — this file sat at 10 for three
+// days after the cap moved to 16, silently refusing valid drawings.
+const {PALETTE_SIZE: PALETTE_MAX} = require('./lib/format.js');
 
 // ── args ─────────────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
