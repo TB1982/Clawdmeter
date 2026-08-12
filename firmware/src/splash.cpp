@@ -86,9 +86,6 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // meet at boot and the last slot is what loops back into it. The summer
     // pair is deliberate and survived the cull intact: "hanabi" follows "swim
     // summer" so the rubber ring runs straight into the fireworks.
-    // "lurking" is the one official animation that reads as idle rather than
-    // busy: he peeks in from off-screen and is mostly not there at all.
-    //
     // Reordered 2026-08-12. "waiting" joins from the usage screen's waiting
     // panel, where it was drawn for and where almost nobody ever saw it — that
     // panel needs the link up and the data stale for 90 s. "magnifier" takes
@@ -98,14 +95,30 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // Both rain scenes are in this list. Keeping them apart was tried and
     // abandoned — they are both idle by temperament, and the only group that
     // would take one is the wrong group for it. They are separated *within* the
-    // round instead, by "lurking", so the rotation never runs rain into rain.
+    // round instead, so the rotation never runs rain into rain.
     //
-    // The shape of the round: the rubber ring, the fireworks, then alone at a
-    // bus stop, then barely on screen at all, then the rain, then he leaves the
-    // planet — which lands back on the rubber ring. The loudest thing in the
-    // catalogue sits one slot from the quietest, which is the whole reason to
-    // order these by hand rather than alphabetically.
-    { "swim summer", "hanabi", "waiting", "lurking", "rainy days", "space",
+    // Nova's ordering, and the shape is an alternation rather than a curve:
+    //
+    //   lurking      he peeks in from off-screen to see whether you are there
+    //   swim summer  bright
+    //   rainy days   quiet
+    //   hanabi       bright
+    //   waiting      quiet
+    //   space        he leaves, which lands back on the peek
+    //
+    // This costs the old "swim summer -> hanabi" adjacency, which had been
+    // deliberate (the two summer scenes back to back). The alternation is the
+    // better reason: every loud slot is followed by a quiet one, so nothing in
+    // the round has to compete with what precedes it, and the two rain scenes
+    // end up two apart instead of one.
+    //
+    // On "lurking" leading: upstream puts "magnifier" first with the note that
+    // "lurking-first would boot to a near-empty screen", and the measurement
+    // agrees — 15% of its 4,330 ms loop is a completely blank frame, and at his
+    // fullest he inks 141 of 1,600 cells. It matters less here, because
+    // SPLASH_OPENING_ANIM plays once at power-up and covers the actual boot
+    // moment, so slot 0 is what follows the greeting rather than what greets.
+    { "lurking", "swim summer", "rainy days", "hanabi", "waiting", "space",
       NULL },
     // Group 1 — normal pace: moving about, but not at anything in particular.
     // Both gaits go here. Note they animate in place — upstream translates them

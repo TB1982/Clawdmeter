@@ -21,11 +21,11 @@ slot 0 is what you meet at boot, and the last slot is what loops back into it.
 
 | # | animation | frames | one loop | loops per slot |
 |---|---|---|---|---|
-| 1 | swim summer | 16 | 6,320 ms | 3.16 |
-| 2 | hanabi | 30 | 10,000 ms | 2 ✓ |
-| 3 | waiting | 25 | 5,000 ms | 4 ✓ |
-| 4 | lurking | 24 | 4,330 ms | 4.62 |
-| 5 | rainy days | 18 | 2,700 ms | 7.41 |
+| 1 | lurking | 24 | 4,330 ms | 4.62 |
+| 2 | swim summer | 16 | 6,320 ms | 3.16 |
+| 3 | rainy days | 18 | 2,700 ms | 7.41 |
+| 4 | hanabi | 30 | 10,000 ms | 2 ✓ |
+| 5 | waiting | 25 | 5,000 ms | 4 ✓ |
 | 6 | space | 8 | 4,000 ms | 5 ✓ |
 
 ## Group 1 — normal
