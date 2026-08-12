@@ -468,15 +468,20 @@ static void build_idle_group(lv_obj_t* parent) {
     // animated "Listening…" status line carries the words, so no extra text is
     // needed here. He is waiting rather than sleeping — this state means the
     // link is up and the data has not arrived, not that there is nothing to do.
-    // "waiting" draws that literally: him at a bus stop in the rain, under a
-    // leaf. It is the only animation you cannot make appear on demand, which is
-    // why it is worth it being something.
+    //
+    // "waiting" held this slot from 2026-08-10 and traded places with "rainy
+    // days" on 2026-08-12. Nova wanted the bus stop where it could actually be
+    // seen: this panel needs the link up and the data stale for 90 s, so it is
+    // the one screen you cannot summon, and the drawing she liked most was
+    // spending its life there. Now the bus stop is in the idle rotation and the
+    // rain is here — which keeps the panel's own logic intact, since both are
+    // pictures of someone standing about in the wet with nothing yet to do.
     //
     // This is the one place an animation is named directly rather than picked
     // from a rate group, so the name has to exist in the build and cannot be
     // retired. See EXCLUDE in convert_to_c.js, and node tools/check_groups.js,
     // which fails if this string stops resolving.
-    idle_creature = splash_mini_create(idle_group, "waiting", L.idle_px);
+    idle_creature = splash_mini_create(idle_group, "rainy days", L.idle_px);
     lv_obj_t* creature = splash_mini_canvas(idle_creature);
     if (creature) lv_obj_align(creature, LV_ALIGN_CENTER, 0, -20);
 

@@ -86,12 +86,20 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // meet at boot and the last slot is what loops back into it. The summer
     // pair is deliberate and survived the cull intact: "hanabi" follows "swim
     // summer" so the rubber ring runs straight into the fireworks.
-    // "magnifier" and "lurking" are the two official animations that read as
-    // idle rather than busy — one is him investigating something at his own
-    // pace, the other is him peeking in from off-screen and mostly not being
-    // there at all.
-    { "swim summer", "hanabi", "magnifier", "rainy days", "lurking", "space",
-      NULL },
+    // "lurking" is the one official animation that reads as idle rather than
+    // busy: he peeks in from off-screen and is mostly not there at all.
+    //
+    // Reordered 2026-08-12. "magnifier" left the build entirely (Nova's call —
+    // see EXCLUDE), and "waiting" traded places with "rainy days", which now
+    // draws the usage screen's waiting panel instead. The two rain scenes are
+    // deliberately never in one list.
+    //
+    // The round is a decrescendo with a lift-off: the rubber ring, then the
+    // fireworks, then he is barely on screen, then he is alone at a bus stop in
+    // the rain — and then he leaves the planet, which lands back on the rubber
+    // ring. The loudest thing in the catalogue sits two slots from the
+    // quietest, which is the whole reason to order these by hand.
+    { "swim summer", "hanabi", "lurking", "waiting", "space", NULL },
     // Group 1 — normal pace: moving about, but not at anything in particular.
     // Both gaits go here. Note they animate in place — upstream translates them
     // across the screen with a gait-locked walk system we don't have, so here
