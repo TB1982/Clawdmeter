@@ -20,6 +20,7 @@ const STEPS = [
   ['build_editor_samples.js', 'animations  -> tools/anim_editor.html samples'],
   ['gen_catalogue.js',        'firmware    -> docs/animation-catalogue.md'],
   ['check_groups.js',         'every name the firmware asks for resolves'],
+  ['check_editor.js',         'the editor parses and its grid maths hold'],
 ];
 
 let n = 0;

@@ -222,6 +222,7 @@
             <select id="gridsize">
               <option value="20">20 × 20</option>
               <option value="40">40 × 40</option>
+              <option value="60">60 × 60</option>
             </select></div>
           <p class="sub" id="sizemsg" style="margin:6px 0 0;font-size:11px;line-height:1.5"></p>
         </div>
@@ -401,11 +402,16 @@ const KM_URL = REPO + '/docs/animation-craft.md';
 // step with GRID_SIZES in tools/convert_to_c.js, which reads the side off frame
 // 0 and rejects anything else.
 //
-// 40 is the only size beyond 20 because it is exactly 2x: every 20x20 cell
-// becomes a 2x2 block, so growing an animation costs nothing and looks
-// identical on the panel until you refine it. 32 or 48 would need interpolation
-// — which is a redraw, not a resize.
-const GRID_SIZES = [20, 40];
+// Every size is a whole multiple of 20: each cell becomes an n x n block, so
+// growing an animation costs nothing and looks identical on the panel until you
+// refine it. 32 or 48 would need interpolation — a redraw, not a resize.
+//
+// 60 matches the stage upstream moved to, which is what makes their art
+// importable (tools/import_official.js). At 480px that is 8px per cell against
+// 24, so the same screen area holds 9x the cells — the extra room is detail,
+// not margin. 40 and 60 do not divide each other, so resampling between those
+// two is refused; go via 20, and accept that 40 -> 20 loses detail.
+const GRID_SIZES = [20, 40, 60];
 let N = 20;                    // current side; changed only via setGridSize()
 
 // Packed frame strings (the embedded samples and TEMPLATE) store one character
@@ -459,6 +465,7 @@ const I18N = {
   sizeUp: '已放大到 40×40：每格拆成 2×2，畫面看起來完全一樣，接下來可以細修。',
   sizeDown: '已縮小到 20×20：每 2×2 格併成一格，細節會流失。想還原按 Cmd-Z（或上面的復原）。',
   badSize: '這支動畫是 {n}×{n}，編輯器只支援 {ok}。',
+  badResize: '{a} 跟 {b} 不是整數倍，直接換算會把像素畫糊掉。請先換到 20×20 再換過去（{a}→20 會掉細節）。',
   loadH: '載入現有動畫', loadBtn: '載入', loadPose: '載入 Clawd 樣板', clearAll: '清空',
   credit: '動畫改作自 <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a>'
         + '（作者 <a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a>），'
@@ -521,6 +528,7 @@ const I18N = {
   sizeUp: 'Grown to 40×40: every cell became a 2×2 block, so it looks identical — now it can be refined.',
   sizeDown: 'Shrunk to 20×20: each 2×2 block became one cell, so detail was lost. Cmd-Z (or Undo) puts it back.',
   badSize: 'This animation is {n}×{n}; the editor supports {ok}.',
+  badResize: '{a} and {b} are not whole multiples of each other, and interpolating pixel art is a redraw. Go via 20×20 ({a}→20 loses detail).',
   loadH: 'Load an existing animation', loadBtn: 'Load', loadPose: 'Load Clawd template', clearAll: 'Clear',
   credit: 'Animations adapted from <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a> '
         + 'by <a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a>; '
@@ -583,6 +591,7 @@ const I18N = {
   sizeUp: '40×40 に拡大しました：各マスが 2×2 になったので見た目は同じです。ここから描き込めます。',
   sizeDown: '20×20 に縮小しました：2×2 のマスが 1 マスにまとまるため、細部は失われます。Cmd-Z（または元に戻す）で戻せます。',
   badSize: 'このアニメーションは {n}×{n} です。エディターが対応しているのは {ok} です。',
+  badResize: '{a} と {b} は整数倍の関係にないため、そのまま変換するとドット絵が崩れます。20×20 を経由してください（{a}→20 はディテールが失われます）。',
   loadH: '既存のアニメーションを読み込む', loadBtn: '読み込む', loadPose: 'Clawd テンプレート', clearAll: 'クリア',
   credit: 'アニメーションは <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a>'
         + '（<a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a> 作）を改変したものです。'
@@ -645,6 +654,7 @@ const I18N = {
   sizeUp: '已放大到 40×40：每格拆成 2×2，画面看起来完全一样，接下来可以细修。',
   sizeDown: '已缩小到 20×20：每 2×2 格并成一格，细节会流失。想还原按 Cmd-Z（或上面的撤销）。',
   badSize: '这支动画是 {n}×{n}，编辑器只支持 {ok}。',
+  badResize: '{a} 跟 {b} 不是整数倍，直接换算会把像素画糊掉。请先换到 20×20 再换过去（{a}→20 会掉细节）。',
   loadH: '载入现有动画', loadBtn: '载入', loadPose: '载入 Clawd 模板', clearAll: '清空',
   credit: '动画改作自 <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a>'
         + '（作者 <a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a>），'
@@ -857,29 +867,30 @@ const grid = $('grid'), gx = grid.getContext('2d');
 const CANVAS_PX = 480;
 let CELL = CANVAS_PX / N;      // 24 at 20x20, 12 at 40x40
 
-// 20 -> 40: every cell becomes a 2x2 block. Nothing is lost and nothing moves,
-// so the animation looks the same until it is refined.
-const upscale = g => {
-  const out = Array.from({length: g.length * 2}, () => new Array(g.length * 2).fill(0));
-  for (let r = 0; r < g.length; r++) for (let c = 0; c < g.length; c++) {
+// 20 -> 40 (x2), 20 -> 60 (x3): every cell becomes a k x k block. Nothing is
+// lost and nothing moves, so the animation looks the same until it is refined.
+const upscale = (g, k) => {
+  const n = g.length, out = Array.from({length: n * k}, () => new Array(n * k).fill(0));
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
     const v = g[r][c];
-    out[r*2][c*2] = out[r*2][c*2+1] = out[r*2+1][c*2] = out[r*2+1][c*2+1] = v;
+    for (let dr = 0; dr < k; dr++) for (let dc = 0; dc < k; dc++) out[r*k+dr][c*k+dc] = v;
   }
   return out;
 };
 
-// 40 -> 20: four cells collapse into one, so this throws detail away. Each 2x2
-// block votes and the majority wins; a tie goes to whichever value appears
-// first, scanning the block in reading order. Picking one corner instead would
-// drop a one-cell highlight half the time depending on which corner it sat in.
-const downscale = g => {
-  const n = g.length / 2;
+// 40 -> 20, 60 -> 20: a k x k block collapses into one cell, so this throws
+// detail away. The block votes and the majority wins; a tie goes to whichever
+// value appears first, scanning in reading order. Picking one corner instead
+// would drop a one-cell highlight depending on which corner it sat in.
+const downscale = (g, k) => {
+  const n = g.length / k;
   const out = Array.from({length: n}, () => new Array(n).fill(0));
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
-    const quad = [g[r*2][c*2], g[r*2][c*2+1], g[r*2+1][c*2], g[r*2+1][c*2+1]];
-    let best = quad[0], bestCount = 0;
-    for (const v of quad) {
-      const count = quad.filter(x => x === v).length;
+    const block = [];
+    for (let dr = 0; dr < k; dr++) for (let dc = 0; dc < k; dc++) block.push(g[r*k+dr][c*k+dc]);
+    let best = block[0], bestCount = 0;
+    for (const v of block) {
+      const count = block.filter(x => x === v).length;
       if (count > bestCount) { best = v; bestCount = count; }
     }
     out[r][c] = best;
@@ -892,8 +903,13 @@ const downscale = g => {
 function setGridSize(n, {resample = true} = {}) {
   if (!GRID_SIZES.includes(n) || n === N) return false;
   if (resample) {
-    const f = n > N ? upscale : downscale;
-    frames = frames.map(fr => ({ hold: fr.hold, grid: f(fr.grid) }));
+    // Resampling needs one side to be a whole multiple of the other. 40 and 60
+    // are not, so that pair is refused rather than interpolated — interpolating
+    // pixel art is a redraw wearing a resize's clothes.
+    const [hi, lo] = n > N ? [n, N] : [N, n];
+    if (hi % lo !== 0) { alert(t('badResize', {a: N, b: n})); return false; }
+    const k = hi / lo;
+    frames = frames.map(fr => ({ hold: fr.hold, grid: n > N ? upscale(fr.grid, k) : downscale(fr.grid, k) }));
   }
   N = n;
   CELL = CANVAS_PX / N;
@@ -913,9 +929,13 @@ function syncSizeUI() {
   const s = $('gridsize');
   if (s) s.value = String(N);
   const cap = $('cap-splash'), capB = $('cap-badge'), capW = $('cap-wait');
-  if (cap)  cap.textContent  = t('capSplash', {px: CANVAS_PX / N});
-  if (capB) capB.textContent = t('capBadge',  {px: 80 / N});
-  if (capW) capW.textContent = t('capWait',   {px: 160 / N});
+  // 60 does not divide the badge and waiting-panel widths, so these are not
+  // whole numbers there. Shown to one decimal rather than rounded to a lie:
+  // 1.3px per cell is the reason a 60x60 animation cannot carry a badge.
+  const px = v => String(Math.round(v * 10) / 10);
+  if (cap)  cap.textContent  = t('capSplash', {px: px(CANVAS_PX / N)});
+  if (capB) capB.textContent = t('capBadge',  {px: px(80 / N)});
+  if (capW) capW.textContent = t('capWait',   {px: px(160 / N)});
   // The strapline states the grid side, so it is re-rendered here rather than
   // only on a language change.
   const sub = document.querySelector('[data-i18n-html="sub"]');
@@ -1489,10 +1509,12 @@ $('load-sample').onclick = () => {
 
 $('load-template').onclick = () => {
   sel = null; pushUndo();
-  // TEMPLATE is 20x20 art. At 40x40 it is grown instead of refused, so the pose
-  // is still available as a starting point when working at the finer size.
+  // TEMPLATE is 20x20 art. At the larger sides it is grown instead of refused,
+  // so the pose is still a starting point when working at the finer size. The
+  // factor is computed rather than reached by doubling: doubling lands on 80
+  // when the target is 60.
   let g = TEMPLATE.map(row => [...row].map(cell));
-  while (g.length < N) g = upscale(g);
+  if (N > g.length && N % g.length === 0) g = upscale(g, N / g.length);
   frames = [{ hold: 300, grid: g }];
   cur = 0; renderAll();
 };
@@ -1505,7 +1527,11 @@ $('gridsize').onchange = () => {
   if (want === N) return;
   pushUndo();
   const grew = want > N;
-  setGridSize(want);
+  // 40 and 60 do not divide each other, so this can refuse. Drop the undo entry
+  // that nothing used, and put the select back on the side actually in effect —
+  // leaving it showing a size the drawing is not at is the kind of disagreement
+  // that gets believed.
+  if (!setGridSize(want)) { undoStack.pop(); syncSizeUI(); return; }
   $('sizemsg').innerHTML = `<span class="${grew ? 'ok' : 'warn'}">${t(grew ? 'sizeUp' : 'sizeDown')}</span>`;
   renderAll();
 };

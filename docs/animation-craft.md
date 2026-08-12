@@ -226,6 +226,31 @@ Corollary: when choosing between two versions, check the badge before deciding.
 A change that looks like a matter of taste at 24 px/cell can be the whole image
 at 4.
 
+### A bigger grid is more detail, not a smaller picture
+
+Upstream moved to a 60×60 stage. Looking at it running on real hardware, the
+first reaction was that it wasted space — and the measurement agrees, but not
+for the reason it first looks like.
+
+Their art stage is 55×37 of a 60×60 grid, which on a 480×480 panel is 440×296,
+and their Clawd occupies 24×16 cells inside it: **192×128 screen pixels.** Ours
+is about 336×312. So the same character is drawn at less than half the size,
+with the panel's whole vertical margin left dark.
+
+The trap is to read the extra cells as margin. They are not. The panel does not
+change size, so going from 20 to 60 takes a cell from 24 px to 8 px and puts
+**nine times as many of them in the same physical area.** A 20×20 drawing
+upscales into it exactly — each cell becomes a 3×3 block, nothing moves, nothing
+is lost — and everything added after that is detail that had nowhere to go
+before. Upstream spent that budget on making the character smaller. It can just
+as well be spent on making the scene richer.
+
+Two costs, both real. A frame is `side²` bytes, so 3,600 against 400 — a
+25-frame animation is 90 KB of flash instead of 10. And a 60×60 animation cannot
+carry the corner badge at all: 80 screen pixels across 60 cells is 1.3 px/cell,
+well under the 4 px/cell where the section above found the limit of legibility.
+Whatever is drawn at 60 is a splash-only animation. *(2026-08-12)*
+
 ---
 
 ## Timing
