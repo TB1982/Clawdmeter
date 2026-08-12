@@ -229,13 +229,26 @@ rebuild the firmware.
 
 ## License note
 
-Two parties hold rights in what's in here, and this project holds neither.
+**As of 2026-08-12 the firmware carries no claudepix material.** All of it —
+the scrapes, Nova's corrections to them, and the three animations that pose
+claudepix frames under her props — is listed in `EXCLUDE` in `convert_to_c.js`
+and is not compiled in. What ships is the ten animations Nova drew.
 
-The animations are adapted from [claudepix](https://claudepix.vercel.app) by
-[@amaanbuilds](https://x.com/amaanbuilds), a site that states no license. The
-character Clawd belongs to Anthropic. Several animations in
-`tools/drawn_anims/` are hand-edited versions of the claudepix originals, so
-they are derivative of both.
+The reason is provenance, not quality: [claudepix](https://claudepix.vercel.app)
+by [@amaanbuilds](https://x.com/amaanbuilds) **states no license at all**, which
+made it the murkiest thing this project depended on. Upstream reached the same
+place from the other direction, replacing its claudepix catalogue with official
+Anthropic art in #153.
+
+The source files stay in `claudepix_data/`, `custom_anims/` and `drawn_anims/`.
+They are still loadable in the editor, `make_custom_anims.js` still needs them
+as bases, and any of them can be put back by deleting a line from `EXCLUDE`. So
+this section still applies to the repository, just not to the device:
+
+Two parties hold rights in that material and this project holds neither. The
+character Clawd belongs to Anthropic, the pixel animations are claudepix's, and
+the hand-edited versions in `drawn_anims/` are derivative of both. The official
+art that replaces it on the device is Anthropic's outright.
 
 This is a non-commercial community project. It is **licensed by neither party
 and licenses nothing to anyone** — publishing a derivative work under an open

@@ -69,6 +69,44 @@ const EXCLUDE = new Set([
   // animation directly rather than picking from a rate group, so anything it
   // names has to stay in the build no matter what the groups say.
   'expression sleep',
+
+  // ─── 2026-08-12: every remaining claudepix animation ────────────────────
+  // Nova's call, after upstream replaced its claudepix catalogue with official
+  // Anthropic art. The reason is provenance rather than quality: claudepix
+  // states no licence at all, which makes it the murkiest thing this project
+  // depends on. With these gone the device carries two sources and no third —
+  // what Nova drew, and Anthropic's own art.
+  //
+  // The source JSON stays in tools/claudepix_data/ and tools/custom_anims/, so
+  // all of it remains loadable in the editor and any of it can be brought back
+  // by deleting a line here.
+  //
+  // Percentages are cells differing from the claudepix original, measured
+  // frame by frame. They are an upper bound — a whole-figure shift of one cell
+  // scores high without being a redraw — but they do say which of these were
+  // barely touched and which Nova had substantially rebuilt.
+  'idle look around',      // 0%: the untouched scrape, never opened in the editor
+  'dance bounce',          // 5.9%
+  'expression surprise',   // 14.4%, redrawn for legibility at 4 px/cell
+  'work think',            // 15.4%, fixed the body-coloured thought marks
+  'expression wink',       // 20.8%, redrawn for legibility
+  'work coding',           // 35.0%, redrawn for legibility
+  'dance djmix',           // 45.6% — the most rebuilt of them, and it was
+                           // SPLASH_CELEBRATE_ANIM. "hanabi" takes that over.
+
+  // Composed by make_custom_anims.js: Nova drew the props, but each one poses
+  // claudepix frames underneath — the hearts and the blossom ride "idle
+  // breathe", the headphones ride "dance bounce". The prop is hers; the
+  // animation it rides on is not.
+  'idle hearts',
+  'idle blossom',
+  'fm listening',
+
+  // Already picked by nothing since 2026-08-09 — four frames each, and the two
+  // the claudepix site itself never lists. They were costing flash to sit in
+  // the build unreachable.
+  'dance bob',
+  'work type',
 ]);
 
 function safeIdent(s) {

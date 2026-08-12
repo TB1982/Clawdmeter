@@ -17,19 +17,28 @@ alongside:
 
 `idle hearts`, `idle blossom`, `work out` and `swim summer` are new rather than
 corrections. `work out` has him doing alternating dumbbell curls, two frames per
-rep, holding the top of each one twice as long as the lift. `swim summer` is
-`dance bob` redrawn past recognition — sunglasses, a rubber ring, water — and it
-carries the catalogue's only two-speed loop: eight frames at 70 ms for a glint
-sweeping across the lenses, then eight at 700-780 ms of drifting. Half a second
-of sparkle, six seconds of doing nothing.
+rep, holding the top of each one twice as long as the lift. `swim summer` —
+sunglasses, a rubber ring, water — carries the catalogue's only two-speed loop:
+eight frames at 70 ms for a glint sweeping across the lenses, then eight at
+700-780 ms of drifting. Half a second of sparkle, six seconds of doing nothing.
 
-`dance bob` and `work type` are still in `claudepix_data/` but no longer listed
-in any group in `splash.cpp`, so nothing picks them. They are the two the
-claudepix site itself never lists, and both are four frames with almost nothing
-happening in them.
+> **Correction, 2026-08-12.** This file used to say `swim summer` was "`dance
+> bob` redrawn past recognition". It is not derived from `dance bob` at all —
+> Nova drew it from scratch and reused that name when saving. The claim
+> travelled into `splash.cpp`'s group comments too, and both are fixed. Kept
+> here rather than deleted because a provenance note that was wrong once is
+> worth being able to see was wrong.
 
-They remain derivative of [claudepix](https://claudepix.vercel.app) by
-[@amaanbuilds](https://x.com/amaanbuilds) and of Anthropic's character — see
+**As of 2026-08-12 no claudepix animation ships.** The corrections listed above
+are excluded from the firmware along with the originals they correct — see
+`EXCLUDE` in `tools/convert_to_c.js` for the list and the reasoning. The files
+stay here and in `claudepix_data/`, so every one of them is still loadable in
+the editor and any of them can be brought back by deleting a line from that
+list. What reaches the device is now Nova's own drawings, with Anthropic's
+official art to follow.
+
+The corrections remain derivative of [claudepix](https://claudepix.vercel.app)
+by [@amaanbuilds](https://x.com/amaanbuilds) and of Anthropic's character — see
 the license note in `tools/README.md`.
 
 ```bash
@@ -67,9 +76,14 @@ too.
 }
 ```
 
-20×20 (40×40 also validates, but no 40×40 animation has been checked on the two
-C6 boards), at most 16 palette entries, cell values index the palette — every
-one must be less than the number of entries you declared — and holds in ms.
+Grid side and palette cap both come from `tools/lib/format.js`, which is the
+one place they are defined — don't copy the numbers here, they have drifted
+before. At the time of writing that is 20×20 or 40×40, and at most 36 palette
+entries. (No 40×40 animation has been checked on the two C6 boards: those
+render one pixel per cell and let LVGL upscale, so the scale factor is a
+property of the grid side and mixing sizes trips a `static_assert` in
+`splash.cpp`.) Cell values index the palette — every one must be less than the
+number of entries you declared — and holds are in ms.
 `convert_to_c.js` validates all of it and fails loudly — the firmware reads
 these arrays with fixed strides and no bounds checks, so a 19-row grid doesn't
 produce a wrong picture, it produces a device reading past the end of an array.

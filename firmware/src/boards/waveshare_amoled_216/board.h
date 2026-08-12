@@ -18,7 +18,13 @@
 #define LCD_SDIO1            5
 #define LCD_SDIO2            6
 #define LCD_SDIO3            7
-#define LCD_RESET            2
+// Was 2 from the original port until 2026-08-12, which is the TF slot's clock
+// line, not the panel's reset — proven by mounting a card on GPIO 1/2/3/41
+// while the display carried on unaffected: SPI cannot enumerate a card unless
+// the clock actually reaches it. So the old value drove nothing, and the panel
+// has always come up on its own power-on reset. Harmless until a card is
+// inserted; wrong the moment one is.
+#define LCD_RESET            39
 
 // ---- I2C bus (touch + PMU + IMU) ----
 #define IIC_SDA              15
@@ -26,7 +32,7 @@
 
 // ---- Touch (CST9220 via TouchDrvCST92xx library) ----
 #define TP_INT               11
-#define TP_RST               2     // shared with LCD_RESET
+#define TP_RST               40    // was 2 — see LCD_RESET above; not shared
 #define CST9220_ADDR         0x5A
 
 // ---- PMU ----
@@ -50,6 +56,26 @@
 #define SND_PA_PIN           46     // power-amp enable, HIGH = on
 #define SND_SAMPLE_RATE      44100
 #define SND_ES8311_ADDR      0x18
+
+// ---- microSD / TF slot (present, wired, unused by this firmware) ----
+// SPI, and verified on hardware 2026-08-12: a 4 GB card enumerated as SDHC and
+// its root directory listed, on these pins, with the display and touch running
+// normally throughout. That measurement is what established LCD_RESET/TP_RST
+// above were pointing at SD_SCK — SPI cannot enumerate a card unless the clock
+// actually reaches it.
+//
+// Nothing drives these yet. The reason to care: the splash renderer reads frame
+// data through a plain `const uint8_t *` (splash_frame() in
+// splash_animations.h), so it does not care whether that points into flash or
+// into PSRAM. Animations could be loaded from a card into the 8 MB PSRAM at
+// runtime without the renderer changing at all — what is missing is a file
+// format, a loader, and a runtime animation table in place of the generated
+// `static const splash_anims[]`. Not needed yet: after the claudepix cull the
+// 2.16 build has ~1.4 MB of flash spare.
+#define SD_MOSI              1
+#define SD_SCK               2
+#define SD_MISO              3
+#define SD_CS                41
 
 // ---- Capability flags (compile-time; redundant with BoardCaps but lets
 // the linker dead-strip whole functions on boards that don't need them) ----

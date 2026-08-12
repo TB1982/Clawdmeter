@@ -26,7 +26,9 @@ Connects to a host daemon over BLE; daemon polls Anthropic API for usage data. T
 ## Hardware (critical pins)
 
 ### AMOLED-2.16 (original)
-- Display: **CO5300** AMOLED via QSPI (CS=12, SCLK=38, SDIO0..3=4..7, RST=2)
+- Display: **CO5300** AMOLED via QSPI (CS=12, SCLK=38, SDIO0..3=4..7, **RST=39**)
+- Touch reset is **GPIO 40** — *not* shared with the display reset. Both said `2` from the original port until 2026-08-12; GPIO 2 is the **TF card's SPI clock**, so the old value drove nothing and the panel came up on its own power-on reset. Harmless with an empty slot, wrong the moment a card is inserted.
+- **microSD/TF slot**: SPI on MOSI=1, SCK=2, MISO=3, CS=41. Verified on hardware (a 4 GB card enumerated as SDHC and listed while the display and touch kept working — which is what proved GPIO 2 belongs to the card). No firmware uses it yet.
 - Touch: **CST9220** via I2C (SDA=15, SCL=14, INT=11, addr=0x5A)
 - PMU: **AXP2101** on same I2C bus (addr=0x34) — battery, USB VBUS, PWR button IRQ
 - IMU: **QMI8658** on same I2C bus (addr=0x6B) — accelerometer for auto-rotation
