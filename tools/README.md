@@ -129,6 +129,47 @@ suggesting it.
 It is checked in rather than kept in `~/.claude/`, so it travels with the repo
 and can be corrected like any other file here when the pipeline changes.
 
+## 2d. Import the official art as a 60×60 template
+
+```bash
+node import_official.js --list                    # what's there, and what it costs
+node import_official.js --name "sailing scene"    # one, into tools/official_anims/
+```
+
+Upstream replaced the claudepix animations with official Anthropic art on a
+**60×60 grid**, storing each one as a bounding-box crop plus an origin on a
+shared 55×37 stage. This flattens that back to a full 60×60 grid — the crop
+placed where the device actually draws it — so the result opens in the editor
+and renders in our engine unchanged. `splash_anim_def_t` has carried a
+per-animation `grid` field since the stride moved off the array type, so nothing
+in the firmware needed changing to accept 60.
+
+**The empty space is the point.** Their stage is 440×296 of a 480×480 panel and
+their Clawd is 192×128 inside it, so most of the screen goes unused. At 60×60 a
+cell is 8px against our 24 — the same physical area at **9× the cells**, which
+is room for detail rather than a smaller picture. A 20×20 animation upscales
+into it exactly (each cell becomes a 3×3 block, nothing moves), so an existing
+drawing can be grown and then refined instead of redrawn.
+
+Three things to know before shipping one:
+
+- **Flash.** A frame is `side²` bytes: 3,600 at 60×60 against 400. `sailing
+  scene` is 127 KB, all seventeen come to 1,684 KB, and the 2.16 build has about
+  1.4 MB spare. A few, not all.
+- **C6 boards stop building.** PSRAM-less boards render one pixel per cell and
+  let LVGL upscale, so the scale factor is a property of the grid side; mixing
+  sizes in one build trips the `static_assert` in `splash.cpp`. It fails at
+  compile time with the reason — intended behaviour, not a bug.
+- **Loop regions are lost.** Upstream plays intro → loop (held ~6 s) → outro and
+  never hard-cuts between animations; ours loops the whole file, so an imported
+  animation replays its intro and outro every pass. The frame numbers are
+  recorded in the JSON's `description` rather than dropped silently.
+
+`tools/official_anims/` is gitignored: the art is Anthropic's, and it is one
+command away from upstream's own copy, so committing it would be redistributing
+art to save nothing. Edited derivatives go to `drawn_anims/` like any other
+drawing.
+
 ## 3. Convert to C
 
 ```bash
@@ -163,6 +204,7 @@ node sync_animations.js
 | `build_editor_samples.js` | animations → the samples embedded in `anim_editor.html` |
 | `gen_catalogue.js` | firmware → [`docs/animation-catalogue.md`](../docs/animation-catalogue.md) |
 | `check_groups.js` | every name the firmware asks for resolves to something |
+| `check_editor.js` | the editor's script parses and its grid maths hold |
 
 It stops at the first failure and exits non-zero, so it can be chained in front
 of a build.
