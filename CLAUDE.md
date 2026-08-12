@@ -15,6 +15,8 @@ Six ports today (two SoC families, four panel sizes):
 - `boards/waveshare_amoled_206/` — Waveshare ESP32-S3-Touch-AMOLED-2.06 (CO5300, 410×502 watch form factor, FT3168 touch, no IO expander, 32 MB flash, PCF85063 RTC, ES8311 codec). Build env: `waveshare_amoled_206`. Display, touch, battery, IMU init, and BLE verified on hardware; the ES8311 chime path is not wired up (`sound.cpp` no-ops).
 - `boards/waveshare_lcd_154/` — Waveshare ESP32-S3-Touch-LCD-1.54 (ST7789, 240×240 square, CST816T touch @ 0x15). Build env: `waveshare_lcd_154`. **The first non-AMOLED port**: a plain 4-wire SPI TFT, not QSPI, and the panel has no brightness command — backlight is LEDC PWM on `LCD_BL`. **No PMU**: battery is an ADC divider on GPIO1 and `BAT_EN` (GPIO2) is a power-hold line that must be driven HIGH early in `board_init()` or the board browns out on battery. Three buttons (BOOT + GPIO5 + a PWR-role GPIO4); ES8311 chime wired up; QMI8658 populated but unused (fixed orientation, no rotation).
 
+Plus one non-hardware target: `boards/sim/` — **native desktop simulator** (SDL2 window, 480×480, `platform = native`). Build env: `sim`. See "Desktop simulator" below.
+
 **C6 ports have no PSRAM** — shared code gates on `BOARD_HAS_PSRAM` (absent on C6) to use `MALLOC_CAP_INTERNAL` for LVGL/splash buffers, and the `screenshot` serial command is disabled (`LV_USE_SNAPSHOT=0`), so UI changes on a C6 board must be eyeballed on hardware, not auto-captured.
 
 The shared code calls a small HAL (`firmware/src/hal/`) that each board implements: display, touch, input, power, IMU. Optional features are guarded by `BoardCaps` (runtime) and `BOARD_HAS_*` (compile-time) rather than `#ifdef BOARD_*`.
@@ -80,6 +82,7 @@ firmware/src/
     waveshare_amoled_18_c6/ — C6: SH8601 + FT3168 + AXP PKEY + TCA9554 (gates power), no PSRAM
     waveshare_amoled_206/   — CO5300 + FT3168 + AXP PKEY, no IO expander, 32 MB, no rotation
     waveshare_lcd_154/      — ST7789 SPI TFT + CST816T + ADC battery (no PMU), PWM backlight
+    sim/                    — native desktop simulator: SDL2 + Arduino shims + scenario playback
     template/               — copy this to bootstrap a new port
   main.cpp                  — setup() + loop(): HAL calls only, zero #ifdef BOARD_*
   ui.{h,cpp}                — 3-screen UI (splash, usage, bluetooth). compute_layout() picks fonts/positions from board_caps() (responsive — current breakpoint: H >= 460 → large, else compact)
@@ -118,16 +121,78 @@ If `pio` isn't on PATH: try `~/.platformio/penv/bin/pio` (Linux/macOS pio instal
 
 Device path differs by OS: `/dev/cu.usbmodem*` on macOS, `/dev/ttyACM0` on Linux. Both expose the ESP32-S3 native USB-JTAG (no boot-mode dance needed).
 
+## Desktop simulator (`-e sim`) — develop UI without hardware
+
+```bash
+sudo apt install libsdl2-dev   # once (macOS: brew install sdl2)
+pio run -d firmware -e sim && (cd firmware && .pio/build/sim/program)
+```
+
+An SDL2 window stands in for the 480×480 panel; the **full firmware loop runs
+unmodified** — `main.cpp`, `ui.cpp`, `splash.cpp`, idle fade, pair gesture,
+JSON parsing, usage-rate/chime logic. Only `ble.cpp`/`chime.cpp` are swapped
+for stubs. How it works: `boards/sim/` implements the HAL against SDL2, thin
+Arduino shims live in `boards/sim/shim/` (`millis`/`Serial`→stdio,
+`heap_caps`→malloc, in-memory `Preferences`), and `ble_sim.cpp` plays back
+daemon payloads from `firmware/sim/scenario.jsonl` (one JSON line per state +
+optional `name`/`hold_ms`; override with `SIM_SCENARIO=<path>`).
+
+Controls (full map in `boards/sim/board.h`): mouse = touch · space =
+play/pause scenario · ←/→ = step · 1-9 = jump · d = BLE link toggle ·
+b/n = BOOT/secondary buttons · p = PWR · c/-/= = charging/battery ·
+s = screenshot BMP · esc = quit.
+
+Headless screenshots (works in CI, no display):
+`SDL_VIDEODRIVER=dummy SIM_AUTOSHOT_MS=6000 .pio/build/sim/program` saves
+`sim-autoshot.bmp` (or `SIM_AUTOSHOT_PATH`) after 6 s and exits.
+
+`SIM_SCRIPT` drives it first, so no screen needs a human at the window and no
+screen needs a temporary edit to `main.cpp`. Comma-separated `ms:action[:arg]`,
+fired once the clock passes each `ms` (order doesn't matter):
+
+| step | |
+|---|---|
+| `600:tap` / `600:tap:240,300` | tap the centre, or a point |
+| `1200:key:p` | press and release any key from the map above |
+| `1400:hold:p:1800` | hold a key (PWR long-press → pair gesture) |
+| `2000:shot:out.bmp` | screenshot |
+| `2400:quit` | exit |
+
+`./sim_shot.sh out.png "<script>"` wraps all of it — builds, runs headless,
+appends the shot/quit steps, converts BMP→PNG. `--at <ms>` moves the shot,
+which is also how you pick *which frame* of an animation you capture.
+
+```bash
+./sim_shot.sh usage.png "1000:tap"                   # tap through to the usage screen
+./sim_shot.sh anim.png "600:key:p,800:key:p" --at 4000   # 3rd animation, 4 s in
+```
+
+**The sim renders with desktop LVGL and fake data — always do a final check on
+real hardware before merging panel-related changes** (col offsets, rotation,
+rounding live in the hardware boards, not shared code).
+
 ## QA your own UI changes — don't ask the user
 
-The firmware ships a `screenshot` serial command that dumps the LVGL framebuffer. `./screenshot.sh out.png [port]` captures a PNG sized to the active display (480×480 or 368×448). **Use this on every UI iteration** — Read the PNG with the Read tool, verify the change visually, iterate. Script auto-picks the macOS/Linux default port and falls back to pio's bundled Python if pyserial isn't on the system Python.
+**Reach for `./sim_shot.sh` first** (see the simulator section above): no board,
+no serial port, no button presses, ~2 s per shot, and it reaches every screen.
+Read the PNG with the Read tool, verify the change visually, iterate. Go to
+hardware for the last check, and immediately for anything panel-specific.
+
+On hardware, the firmware ships a `screenshot` serial command that dumps the LVGL framebuffer. `./screenshot.sh out.png [port]` captures a PNG sized to the active display (480×480 or 368×448). Script auto-picks the macOS/Linux default port and falls back to pio's bundled Python if pyserial isn't on the system Python.
 
 Other serial commands, both there so a state that normally needs waiting can be
 triggered on demand: `buzz` fires the reset chime, `party` fires the reset
 celebration (30s of `dance djmix` on the splash and the corner badge). Without
 `party` you'd have to wait out a real 5-hour window refill to see it.
 
-The boot screen is `SCREEN_SPLASH` and only advances on a physical button press, so a fresh flash will sit on the splash. To screenshot the screen you're actually editing without asking the user to press a button, **temporarily change the default boot screen** in `main.cpp` (search for `ui_show_screen(SCREEN_SPLASH);`) to `SCREEN_USAGE` / `SCREEN_CONTROLLER` / `SCREEN_BLUETOOTH`, do your iteration, then revert before committing.
+The boot screen is `SCREEN_SPLASH` and only advances on a physical button
+press, so a fresh flash will sit on the splash. On hardware that still means
+**temporarily changing the default boot screen** in `main.cpp` (search for
+`ui_show_screen(SCREEN_SPLASH);`) to `SCREEN_USAGE` / `SCREEN_CONTROLLER` /
+`SCREEN_BLUETOOTH`, then reverting before committing. In the sim, don't — use
+`sim_shot.sh "1000:tap"` instead. The edit-and-revert dance is how the waiting
+panel was verified, and it is exactly the kind of temporary change that gets
+committed by accident.
 
 ## Critical gotchas
 
