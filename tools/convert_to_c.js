@@ -113,14 +113,6 @@ const EXCLUDE = new Set([
   // the build unreachable.
   'dance bob',
   'work type',
-
-  // Official art, imported and then not wanted: Nova swapped it out of the idle
-  // group for "waiting" the same day it landed. It is the most expensive
-  // animation in the catalogue at 43 frames of 40x40 — 67 KB, which is 2% of
-  // the partition and worth having back at 85% full. Excluded rather than
-  // merely unlisted, because an animation that is in the build and picked by
-  // nothing costs exactly as much as one that plays.
-  'magnifier',
 ]);
 
 function safeIdent(s) {

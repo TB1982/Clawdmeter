@@ -11,21 +11,22 @@ it cannot disagree with the build. For *why* an animation looks the way it does,
 see [`animation-craft.md`](animation-craft.md); for how the pipeline works, see
 [`../tools/README.md`](../tools/README.md).
 
-25 animations are compiled in. The splash shows one for **20,000 ms** and then advances to the next entry in the group the current
+26 animations are compiled in. The splash shows one for **20,000 ms** and then advances to the next entry in the group the current
 usage rate selects, wrapping at the end. The order below *is* the playback order:
 slot 0 is what you meet at boot, and the last slot is what loops back into it.
 
 ## Group 0 — idle
 
-5 of 9 slots · one full round is 100 s
+6 of 9 slots · one full round is 120 s
 
 | # | animation | frames | one loop | loops per slot |
 |---|---|---|---|---|
 | 1 | swim summer | 16 | 6,320 ms | 3.16 |
 | 2 | hanabi | 30 | 10,000 ms | 2 ✓ |
-| 3 | lurking | 24 | 4,330 ms | 4.62 |
-| 4 | waiting | 25 | 5,000 ms | 4 ✓ |
-| 5 | space | 8 | 4,000 ms | 5 ✓ |
+| 3 | waiting | 25 | 5,000 ms | 4 ✓ |
+| 4 | lurking | 24 | 4,330 ms | 4.62 |
+| 5 | rainy days | 18 | 2,700 ms | 7.41 |
+| 6 | space | 8 | 4,000 ms | 5 ✓ |
 
 ## Group 1 — normal
 
@@ -66,7 +67,7 @@ slot 0 is what you meet at boot, and the last slot is what loops back into it.
 | 6 | trumpet | 34 | 4,010 ms | 4.99 |
 | 7 | jumping happy | 14 | 1,760 ms | 11.36 |
 
-A ✓ means the loop divides the slot exactly, so it is never cut part-way. 7 of 23 do: hanabi, waiting, space, crab walking, work mode, dancing, this is fine.
+A ✓ means the loop divides the slot exactly, so it is never cut part-way. 7 of 24 do: hanabi, waiting, space, crab walking, work mode, dancing, this is fine.
 
 ## Not picked by a rate group
 
@@ -74,7 +75,7 @@ A ✓ means the loop divides the slot exactly, so it is never cut part-way. 7 of
 |---|---|
 | opening | `SPLASH_OPENING_ANIM` |
 | hanabi | `SPLASH_CELEBRATE_ANIM` |
-| rainy days | named directly by `ui.cpp` |
+| magnifier | named directly by `ui.cpp` |
 
 A name in this table cannot be excluded from the build without breaking the
 thing that asks for it — unlike a group entry, which only stops being picked.
@@ -106,4 +107,3 @@ so a retired animation can still be opened and reworked:
 - fm listening
 - dance bob
 - work type
-- magnifier

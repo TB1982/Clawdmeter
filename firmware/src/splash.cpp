@@ -89,17 +89,24 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // "lurking" is the one official animation that reads as idle rather than
     // busy: he peeks in from off-screen and is mostly not there at all.
     //
-    // Reordered 2026-08-12. "magnifier" left the build entirely (Nova's call —
-    // see EXCLUDE), and "waiting" traded places with "rainy days", which now
-    // draws the usage screen's waiting panel instead. The two rain scenes are
-    // deliberately never in one list.
+    // Reordered 2026-08-12. "waiting" joins from the usage screen's waiting
+    // panel, where it was drawn for and where almost nobody ever saw it — that
+    // panel needs the link up and the data stale for 90 s. "magnifier" takes
+    // its place there instead, which is the right way round: the slot you see
+    // least should hold the animation you mind least.
     //
-    // The round is a decrescendo with a lift-off: the rubber ring, then the
-    // fireworks, then he is barely on screen, then he is alone at a bus stop in
-    // the rain — and then he leaves the planet, which lands back on the rubber
-    // ring. The loudest thing in the catalogue sits two slots from the
-    // quietest, which is the whole reason to order these by hand.
-    { "swim summer", "hanabi", "lurking", "waiting", "space", NULL },
+    // Both rain scenes are in this list. Keeping them apart was tried and
+    // abandoned — they are both idle by temperament, and the only group that
+    // would take one is the wrong group for it. They are separated *within* the
+    // round instead, by "lurking", so the rotation never runs rain into rain.
+    //
+    // The shape of the round: the rubber ring, the fireworks, then alone at a
+    // bus stop, then barely on screen at all, then the rain, then he leaves the
+    // planet — which lands back on the rubber ring. The loudest thing in the
+    // catalogue sits one slot from the quietest, which is the whole reason to
+    // order these by hand rather than alphabetically.
+    { "swim summer", "hanabi", "waiting", "lurking", "rainy days", "space",
+      NULL },
     // Group 1 — normal pace: moving about, but not at anything in particular.
     // Both gaits go here. Note they animate in place — upstream translates them
     // across the screen with a gait-locked walk system we don't have, so here
