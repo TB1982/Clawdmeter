@@ -18,7 +18,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const SRC_DIRS = ['claudepix_data', 'custom_anims', 'drawn_anims']
+const SRC_DIRS = ['claudepix_data', 'custom_anims', 'drawn_anims', 'official_anims']
   .map(d => path.join(__dirname, d));
 const EDITOR = path.join(__dirname, 'anim_editor.html');
 const BEGIN = '/*BEGIN-SAMPLES*/', END = '/*END-SAMPLES*/';

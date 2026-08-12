@@ -66,39 +66,53 @@ static int8_t  group_lists[GROUP_COUNT][GROUP_MAX];
 static uint8_t group_size[GROUP_COUNT] = {0};
 static uint8_t group_rotation[GROUP_COUNT] = {0};
 
-// 2026-08-12: every claudepix animation left these lists and the build on the
-// same day (see EXCLUDE in tools/convert_to_c.js for the list and the reason).
-// What is left is the ten Nova drew. Groups 1 and 2 are down to one entry each
-// and will stay thin until the official Anthropic art is imported — a group
-// with one entry does not rotate, it just holds. That is deliberate and
-// temporary; a group with *zero* entries would be worse but still safe,
-// because pick_rate_anim() returns NULL on group_size == 0 rather than
-// dividing by it.
+// 2026-08-12, in two steps on the same day: every claudepix animation left
+// these lists and the build (see EXCLUDE in tools/convert_to_c.js), and then
+// sixteen of Anthropic's official animations were imported to refill them
+// (tools/import_official.js). Two sources on the device now and no third —
+// what Nova drew, and Anthropic's own art.
+//
+// Each list interleaves the two rather than grouping them, so a round is never
+// four of theirs in a row followed by one of hers. The mixing is by subject,
+// not by provenance: whatever the band is about, both sources say it.
+//
+// Note the sizes differ per animation — 20x20 for Nova's, 40x40 for most of the
+// official art, 60x60 for the three too wide to fit 40. splash.cpp handles that
+// (cell size is derived from splash_anim_def_t::grid), but it is why the two C6
+// envs no longer build: see the static_assert at the top of this file.
 static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // Group 0 — idle / sleepy. Order is playback order: pick_rate_anim() walks
     // the list one entry every SPLASH_ROTATE_INTERVAL_MS, so slot 0 is what you
     // meet at boot and the last slot is what loops back into it. The summer
     // pair is deliberate and survived the cull intact: "hanabi" follows "swim
     // summer" so the rubber ring runs straight into the fireworks.
-    // Lost here on 2026-08-12: "idle hearts", "idle blossom", "fm listening"
-    // (Nova's props over claudepix animation) and "expression wink".
-    { "swim summer", "hanabi", "rainy days", "space", NULL },
-    // Group 1 — normal pace. Down to one: "idle look around" was the untouched
-    // claudepix scrape, and "work think" and "work coding" were claudepix
-    // animations Nova had redrawn but not replaced.
-    { "work out", NULL },
-    // Group 2 — active. Down to one. "work mode" is the one animation built to
-    // fill a whole slot in a single pass, so its walk-in plays once instead of
-    // three times and is never cut part-way — which makes it the least bad
-    // animation to be alone in a group, since a lone entry repeats forever.
-    { "work mode", NULL },
+    // "magnifier" and "lurking" are the two official animations that read as
+    // idle rather than busy — one is him investigating something at his own
+    // pace, the other is him peeking in from off-screen and mostly not being
+    // there at all.
+    { "swim summer", "hanabi", "magnifier", "rainy days", "lurking", "space",
+      NULL },
+    // Group 1 — normal pace: moving about, but not at anything in particular.
+    // Both gaits go here. Note they animate in place — upstream translates them
+    // across the screen with a gait-locked walk system we don't have, so here
+    // they march on the spot.
+    { "work out", "walking", "waving", "crab walking", "pointing", NULL },
+    // Group 2 — active (typing along with you). "work mode" is the one
+    // animation built to fill a whole slot in a single pass, so its walk-in
+    // plays once instead of three times and is never cut part-way; it keeps
+    // slot 0. The official four are all him doing a thing with his hands or
+    // feet rather than travelling.
+    { "work mode", "laptop", "dancing", "basketball", "soccer", "skateboard",
+      NULL },
     // Group 3 — heavy. "surfing" leads it from 2026-08-09: at the busiest rate
     // you are not driving, the wave is carrying you, which is a more honest
     // thing for this band to say than a third animation of him dancing.
-    // "this is fine" joined on 2026-08-10. Both have something under him, which
-    // is what was wrong with the three DJ animations that used to be here and
-    // what Nova could see long before any of us could say why.
-    { "surfing", "this is fine", NULL },
+    // "this is fine" joined on 2026-08-10. The official three that join them
+    // are the same thought — a car, a cloud and a boat are all things carrying
+    // him somewhere — and "jumping happy" ends the round on the one unguarded
+    // celebration in the whole catalogue.
+    { "surfing", "racing car", "this is fine", "cloud", "sailing scene",
+      "trumpet", "jumping happy", NULL },
 };
 
 static bool groups_resolved = false;

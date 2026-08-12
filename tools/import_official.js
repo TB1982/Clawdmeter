@@ -37,15 +37,12 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const { PALETTE_SIZE, GRID_SIZES } = require('./lib/format.js');
 
-const GRID = 60;
 const STAGE_W = 55, STAGE_H = 37;
-const ANCHOR_X = (GRID - STAGE_W) >> 1;   // 2   — matches STAGE_ANCHOR_X
-const ANCHOR_Y = (GRID - STAGE_H) >> 1;   // 11  — matches STAGE_ANCHOR_Y
 
-if (!GRID_SIZES.includes(GRID)) {
-  console.error(`tools/lib/format.js does not list ${GRID} in GRID_SIZES; add it first.`);
-  process.exit(1);
-}
+// Where the shared idle Clawd stands on upstream's stage. Frame 0 of 15 of the
+// 17 animations is byte-identical here — 248 inked cells at x 15..38, y 21..36 —
+// which is what "ox: 15" means on every core animation. Measured, not assumed.
+const CLAWD_X = 15, CLAWD_W = 24;
 
 const args = process.argv.slice(2);
 const opt = (k, def) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : def; };
@@ -54,6 +51,68 @@ const has = k => args.includes(k);
 const OUT_DIR = path.resolve(opt('--out', path.join(__dirname, 'official_anims')));
 const REF = opt('--ref', 'origin/main');
 const SRC = opt('--in', null);
+
+// --grid auto|40|60. `auto` is the recommended setting and the default.
+//
+// 60 reproduces upstream exactly: their 55x37 stage centred in a 60x60 grid,
+// 8 px per cell on a 480 px panel. 40 is better where the crop fits, for two
+// reasons that point the same way — a cell becomes 12 px instead of 8, so the
+// character is 288x192 rather than 192x128 and much closer to the scale the
+// rest of this catalogue is drawn at; and a frame costs 1,600 bytes instead of
+// 3,600. Only three crops are too wide for it: cloud (41), racing car and
+// trumpet (50 each).
+const GRID_MODE = opt('--grid', 'auto');
+if (!['auto', '40', '60'].includes(GRID_MODE)) {
+  console.error(`--grid must be auto, 40 or 60 (got "${GRID_MODE}")`);
+  process.exit(1);
+}
+for (const side of [40, 60]) {
+  if (!GRID_SIZES.includes(side)) {
+    console.error(`tools/lib/format.js does not list ${side} in GRID_SIZES; add it first.`);
+    process.exit(1);
+  }
+}
+
+const fitsIn40 = a => a.w <= 40 && a.h <= 40;
+const gridFor = a => GRID_MODE === '60' ? 60
+                   : GRID_MODE === '40' ? 40
+                   : (fitsIn40(a) ? 40 : 60);
+
+// Placement of the crop on a grid of `side`.
+//
+// Vertical: every one of the 17 satisfies oy + h == 37, so they are all
+// anchored to the bottom of the *stage* — which is not the bottom of the grid.
+// Upstream's stage occupies rows 11..47 of 60, leaving 12 rows of margin below
+// it, and that margin is there because the panel's corners are rounded and its
+// bottom edge is not a place to stand. Anchoring to the grid instead put him on
+// the very bottom pixel row; the simulator caught it immediately.
+//
+// So the margin scales with the grid: side/5 (12 at 60, 8 at 40). At side 60
+// this reproduces upstream exactly — 60 - 12 - h == 48 - h == 11 + oy, since
+// oy == 37 - h.
+//
+// Horizontal at 60 keeps upstream's stage anchoring, including its two edge
+// snaps: art touching a stage edge was drawn to hang off the *screen* edge
+// (lurking peeks in from the left), so it goes to the true edge.
+//
+// Horizontal at 40 cannot keep the stage, because the stage is wider than the
+// grid. It keeps the thing the stage was for instead — Clawd landing in the
+// same place in every animation, so the catalogue doesn't jitter him about.
+// He occupies CLAWD_W cells from stage x CLAWD_X; centring that in the grid
+// puts him at (side - CLAWD_W) / 2, so every crop shifts by that minus CLAWD_X.
+// Crops too wide to honour it are clamped, which costs a couple of cells on
+// two animations rather than pushing them off the grid.
+function originX(a, side) {
+  if (side === 60) {
+    const anchor = (side - STAGE_W) >> 1;          // 2, matches STAGE_ANCHOR_X
+    if (a.ox === 0) return 0;
+    if (a.ox + a.w === STAGE_W) return side - a.w;
+    return anchor + a.ox;
+  }
+  const shift = ((side - CLAWD_W) >> 1) - CLAWD_X; // -7 at side 40
+  return Math.max(0, Math.min(side - a.w, a.ox + shift));
+}
+const originY = (a, side) => side - Math.round(side / 5) - a.h;
 
 // ── Read upstream's generated header ────────────────────────────────────────
 function readHeader() {
@@ -101,17 +160,11 @@ function hex565(v) {
   return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
-// Where compose_stage() actually puts the art. The horizontal edge snaps are
-// upstream's: art touching its stage edge was drawn to hang off the screen edge
-// (lurking peeks in from the left), so it goes to the true edge, not the
-// anchored one. Not applied vertically.
-function originX(a) {
-  if (a.ox === 0) return 0;
-  if (a.ox + a.w === STAGE_W) return GRID - a.w;
-  return ANCHOR_X + a.ox;
-}
-
 function convert(a) {
+  const side = gridFor(a);
+  if (a.w > side || a.h > side)
+    throw new Error(`${a.name}: crop is ${a.w}x${a.h}, does not fit a ${side}x${side} grid`);
+
   const pal = nums(a.ident, 'palette', 16);
   const holds = nums(a.ident, 'holds', 10);
   const cells = nums(a.ident, 'frames', 10);
@@ -126,28 +179,30 @@ function convert(a) {
   if (palette.length > PALETTE_SIZE)
     throw new Error(`${a.name}: ${palette.length} palette entries, cap is ${PALETTE_SIZE}`);
 
-  const ax = originX(a), ay = ANCHOR_Y + a.oy;
+  const ax = originX(a, side), ay = originY(a, side);
   const frames = [];
   for (let f = 0; f < a.frameCount; f++) {
-    const grid = Array.from({length: GRID}, () => new Array(GRID).fill(0));
+    const grid = Array.from({length: side}, () => new Array(side).fill(0));
     for (let r = 0; r < a.h; r++) {
       const y = ay + r;
-      if (y < 0 || y >= GRID) continue;
+      if (y < 0 || y >= side) continue;
       for (let c = 0; c < a.w; c++) {
         const x = ax + c;
-        if (x < 0 || x >= GRID) continue;
+        if (x < 0 || x >= side) continue;
         grid[y][x] = cells[(f * a.h + r) * a.w + c];
       }
     }
     frames.push({ hold: holds[f], grid });
   }
 
+  const clamped = side === 40 && ax !== a.ox + (((side - CLAWD_W) >> 1) - CLAWD_X);
   return {
     name: a.name,
     category: 'Official',
     description:
       `Imported from upstream ${a.cat} art by tools/import_official.js. ` +
-      `Crop ${a.w}x${a.h} at stage (${a.ox},${a.oy}), placed at grid (${ax},${ay}). ` +
+      `Crop ${a.w}x${a.h} from stage (${a.ox},${a.oy}), placed at (${ax},${ay}) ` +
+      `on a ${side}x${side} grid${clamped ? ' (x clamped to fit)' : ''}. ` +
       `Upstream loops frames ${a.loopStart}..${a.loopEnd} and holds that region ~6s; ` +
       `our engine loops the whole file, so the intro and outro replay every pass.`,
     palette,
@@ -155,28 +210,49 @@ function convert(a) {
   };
 }
 
+const kb = a => (a.frameCount * gridFor(a) * gridFor(a)) / 1024;
+
 // ── Run ─────────────────────────────────────────────────────────────────────
 if (has('--list')) {
-  console.log(`${anims.length} animations in ${SRC || REF}:\n`);
+  console.log(`${anims.length} animations in ${SRC || REF}   (--grid ${GRID_MODE})\n`);
+  console.log('  ' + 'name'.padEnd(16) + 'cat'.padEnd(9) + 'frames  crop     pal  grid   flash');
   for (const a of anims) {
-    const bytes = a.frameCount * GRID * GRID;
-    console.log(`  ${a.name.padEnd(16)} ${a.cat.padEnd(8)} ${String(a.frameCount).padStart(3)} frames  ` +
-                `crop ${(a.w + 'x' + a.h).padEnd(7)} pal ${String(a.paletteCount).padStart(2)}  ` +
-                `${(bytes / 1024).toFixed(0).padStart(4)} KB at 60x60`);
+    const side = gridFor(a);
+    const fits = a.w <= side && a.h <= side;
+    console.log(`  ${a.name.padEnd(16)}${a.cat.padEnd(9)}${String(a.frameCount).padStart(4)}    ` +
+                `${(a.w + 'x' + a.h).padEnd(8)} ${String(a.paletteCount).padStart(2)}   ` +
+                `${(side + 'x' + side).padEnd(6)} ${fits ? (kb(a).toFixed(0) + ' KB').padStart(7)
+                                                        : '  TOO BIG'}`);
   }
-  const total = anims.reduce((s, a) => s + a.frameCount * GRID * GRID, 0);
-  console.log(`\n  all of them: ${(total / 1024).toFixed(0)} KB of flash at 60x60 ` +
-              `(they cost ${(anims.reduce((s, a) => s + a.frameCount * a.w * a.h, 0) / 1024).toFixed(0)} KB as crops upstream)`);
+  const ok = anims.filter(a => a.w <= gridFor(a) && a.h <= gridFor(a));
+  const skipped = anims.length - ok.length;
+  console.log(`\n  ${ok.length} importable at --grid ${GRID_MODE}: ` +
+              `${ok.reduce((s, a) => s + kb(a), 0).toFixed(0)} KB of flash` +
+              (skipped ? `, ${skipped} too wide for a 40x40 grid` : ''));
+  console.log(`  (upstream stores them as crops, which costs it ` +
+              `${(anims.reduce((s, a) => s + a.frameCount * a.w * a.h, 0) / 1024).toFixed(0)} KB)`);
   process.exit(0);
 }
 
-const wanted = has('--all') ? anims
-             : anims.filter(a => a.name === opt('--name', null));
+// --skip drops names from --all: several of the seventeen are not wanted (e.g.
+// "jumping", which upstream itself leaves out of every rate group and which is
+// a near-duplicate of "jumping happy").
+const skip = new Set((opt('--skip', '') || '').split(',').map(s => s.trim()).filter(Boolean));
+const named = opt('--name', null);
+let wanted = has('--all') ? anims.filter(a => !skip.has(a.name))
+                          : anims.filter(a => a.name === named);
 
 if (!wanted.length) {
-  const want = opt('--name', null);
-  console.error(want ? `No animation named "${want}". Try --list.`
-                     : 'Pass --name "<animation>", --all, or --list.');
+  console.error(named ? `No animation named "${named}". Try --list.`
+                      : 'Pass --name "<animation>", --all, or --list.');
+  process.exit(1);
+}
+
+const tooBig = wanted.filter(a => a.w > gridFor(a) || a.h > gridFor(a));
+if (tooBig.length) {
+  console.error(`These do not fit a ${GRID_MODE}x${GRID_MODE} grid: ` +
+                tooBig.map(a => `${a.name} (${a.w}x${a.h})`).join(', '));
+  console.error('Use --grid auto to put the oversized ones on 60x60. Nothing was written.');
   process.exit(1);
 }
 
@@ -186,12 +262,13 @@ for (const a of wanted) {
   const out = convert(a);
   const file = path.join(OUT_DIR, a.name.replace(/[^a-z0-9]+/gi, '_').toLowerCase() + '.json');
   fs.writeFileSync(file, JSON.stringify(out, null, 1));
-  const b = out.frames.length * GRID * GRID;
+  const side = out.frames[0].grid.length;
+  const b = out.frames.length * side * side;
   bytes += b;
-  console.log(`${path.relative(process.cwd(), file)}  ${out.frames.length} frames, ` +
-              `${out.palette.length} colours, ${(b / 1024).toFixed(0)} KB of flash if shipped`);
+  console.log(`${(side + 'x' + side).padEnd(6)} ${String(out.frames.length).padStart(3)}f ` +
+              `${String(out.palette.length).padStart(2)}c ${(b / 1024).toFixed(0).padStart(4)} KB  ` +
+              path.relative(process.cwd(), file));
 }
 console.log(`\n${wanted.length} written to ${path.relative(process.cwd(), OUT_DIR)}/ ` +
-            `(${(bytes / 1024).toFixed(0)} KB total).`);
-console.log('These are templates: open one in the editor, draw into the empty grid,');
-console.log('and export to tools/drawn_anims/ — this directory is not compiled in.');
+            `— ${(bytes / 1024).toFixed(0)} KB of flash if all are shipped.`);
+if (skip.size) console.log(`skipped: ${[...skip].join(', ')}`);

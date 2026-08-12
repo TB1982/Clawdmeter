@@ -25,11 +25,13 @@ tools/package-lock.json
 # Contact sheets from tools/preview_anim.js — regenerate, don't commit
 tools/preview/
 
-# Official Clawd art imported by tools/import_official.js. Not committed for
-# two reasons: it is Anthropic's, and it is one command away from upstream's
-# own copy, so committing it would be redistributing art to save nothing.
-# Edited derivatives belong in tools/drawn_anims/ like any other drawing.
-tools/official_anims/
+# tools/official_anims/ used to be listed here, on the reasoning that the art is
+# Anthropic's and is one command away from upstream. That was wrong in a way
+# worth recording: the moment any of it ships, the *generated*
+# firmware/src/splash_animations.h carries the same pixels and that file is
+# committed. Ignoring the JSON therefore redistributed nothing less and cost a
+# fresh clone the ability to rebuild the firmware it already contains. It is
+# tracked now, one directory per source of art, same as the other three.
 
 # macOS makes " 2"/" 3" copies of files when iCloud syncs a directory that git
 # is writing to, and Documents/ is synced by default. They are untracked, they
