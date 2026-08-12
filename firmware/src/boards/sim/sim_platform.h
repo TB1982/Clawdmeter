@@ -19,6 +19,13 @@ bool sim_take_pwr_released(void);
 int  sim_battery_pct(void);
 bool sim_charging(void);
 
+// Scripted input (SIM_SCRIPT), consumed by touch.cpp. While a scripted tap is
+// held this returns true and overrides the mouse; otherwise touch.cpp reads
+// SDL_GetMouseState as usual. Needed because SDL_PushEvent does not update the
+// internal mouse-button state that SDL_GetMouseState reports, so a synthetic
+// tap cannot go through the event queue.
+bool sim_touch_override(uint16_t* x, uint16_t* y, bool* pressed);
+
 // Scenario playback controls, implemented in ble_sim.cpp.
 void sim_playback_toggle(void);
 void sim_playback_step(int dir);

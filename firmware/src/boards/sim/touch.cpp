@@ -1,4 +1,5 @@
 #include "board.h"
+#include "sim_platform.h"
 #include "../../hal/touch_hal.h"
 #include <SDL.h>
 
@@ -7,6 +8,7 @@ void touch_hal_init(void) {}
 // Mouse position + left button = one finger. Events are pumped every loop
 // by sim_main.cpp, so SDL_GetMouseState is always fresh here.
 void touch_hal_read(uint16_t* x, uint16_t* y, bool* pressed) {
+    if (sim_touch_override(x, y, pressed)) return;   // SIM_SCRIPT is tapping
     int mx, my;
     uint32_t b = SDL_GetMouseState(&mx, &my);
     if (mx < 0) mx = 0;

@@ -144,22 +144,55 @@ s = screenshot BMP · esc = quit.
 
 Headless screenshots (works in CI, no display):
 `SDL_VIDEODRIVER=dummy SIM_AUTOSHOT_MS=6000 .pio/build/sim/program` saves
-`sim-autoshot.bmp` (or `SIM_AUTOSHOT_PATH`) after 6 s and exits. Combine with
-the boot-screen swap trick below to capture any screen. **The sim renders with
-desktop LVGL and fake data — always do a final check on real hardware before
-merging panel-related changes** (col offsets, rotation, rounding live in the
-hardware boards, not shared code).
+`sim-autoshot.bmp` (or `SIM_AUTOSHOT_PATH`) after 6 s and exits.
+
+`SIM_SCRIPT` drives it first, so no screen needs a human at the window and no
+screen needs a temporary edit to `main.cpp`. Comma-separated `ms:action[:arg]`,
+fired once the clock passes each `ms` (order doesn't matter):
+
+| step | |
+|---|---|
+| `600:tap` / `600:tap:240,300` | tap the centre, or a point |
+| `1200:key:p` | press and release any key from the map above |
+| `1400:hold:p:1800` | hold a key (PWR long-press → pair gesture) |
+| `2000:shot:out.bmp` | screenshot |
+| `2400:quit` | exit |
+
+`./sim_shot.sh out.png "<script>"` wraps all of it — builds, runs headless,
+appends the shot/quit steps, converts BMP→PNG. `--at <ms>` moves the shot,
+which is also how you pick *which frame* of an animation you capture.
+
+```bash
+./sim_shot.sh usage.png "1000:tap"                   # tap through to the usage screen
+./sim_shot.sh anim.png "600:key:p,800:key:p" --at 4000   # 3rd animation, 4 s in
+```
+
+**The sim renders with desktop LVGL and fake data — always do a final check on
+real hardware before merging panel-related changes** (col offsets, rotation,
+rounding live in the hardware boards, not shared code).
 
 ## QA your own UI changes — don't ask the user
 
-The firmware ships a `screenshot` serial command that dumps the LVGL framebuffer. `./screenshot.sh out.png [port]` captures a PNG sized to the active display (480×480 or 368×448). **Use this on every UI iteration** — Read the PNG with the Read tool, verify the change visually, iterate. Script auto-picks the macOS/Linux default port and falls back to pio's bundled Python if pyserial isn't on the system Python.
+**Reach for `./sim_shot.sh` first** (see the simulator section above): no board,
+no serial port, no button presses, ~2 s per shot, and it reaches every screen.
+Read the PNG with the Read tool, verify the change visually, iterate. Go to
+hardware for the last check, and immediately for anything panel-specific.
+
+On hardware, the firmware ships a `screenshot` serial command that dumps the LVGL framebuffer. `./screenshot.sh out.png [port]` captures a PNG sized to the active display (480×480 or 368×448). Script auto-picks the macOS/Linux default port and falls back to pio's bundled Python if pyserial isn't on the system Python.
 
 Other serial commands, both there so a state that normally needs waiting can be
 triggered on demand: `buzz` fires the reset chime, `party` fires the reset
 celebration (30s of `dance djmix` on the splash and the corner badge). Without
 `party` you'd have to wait out a real 5-hour window refill to see it.
 
-The boot screen is `SCREEN_SPLASH` and only advances on a physical button press, so a fresh flash will sit on the splash. To screenshot the screen you're actually editing without asking the user to press a button, **temporarily change the default boot screen** in `main.cpp` (search for `ui_show_screen(SCREEN_SPLASH);`) to `SCREEN_USAGE` / `SCREEN_CONTROLLER` / `SCREEN_BLUETOOTH`, do your iteration, then revert before committing.
+The boot screen is `SCREEN_SPLASH` and only advances on a physical button
+press, so a fresh flash will sit on the splash. On hardware that still means
+**temporarily changing the default boot screen** in `main.cpp` (search for
+`ui_show_screen(SCREEN_SPLASH);`) to `SCREEN_USAGE` / `SCREEN_CONTROLLER` /
+`SCREEN_BLUETOOTH`, then reverting before committing. In the sim, don't — use
+`sim_shot.sh "1000:tap"` instead. The edit-and-revert dance is how the waiting
+panel was verified, and it is exactly the kind of temporary change that gets
+committed by accident.
 
 ## Critical gotchas
 
