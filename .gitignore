@@ -25,6 +25,11 @@ tools/package-lock.json
 # Contact sheets from tools/preview_anim.js — regenerate, don't commit
 tools/preview/
 
+# GIFs/PNGs from tools/export_gif.js — same reasoning. Derived from the JSON in
+# the source directories by one command, and binary, so a commit here would be
+# a second copy of pixels the repo already has in a form it can diff.
+tools/export/
+
 # tools/official_anims/ used to be listed here, on the reasoning that the art is
 # Anthropic's and is one command away from upstream. That was wrong in a way
 # worth recording: the moment any of it ships, the *generated*
