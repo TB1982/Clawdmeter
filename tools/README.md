@@ -199,6 +199,65 @@ The imports are embedded in the editor too, which is the point of importing them
 network, so a megabyte of string literal costs tens of milliseconds at load;
 worth knowing before wondering why the file grew fourfold.
 
+## 2e. Take one off the board
+
+```bash
+node export_gif.js                        # Nova's own drawings, 480×480 GIFs
+node export_gif.js hanabi "rainy days"    # by name
+node export_gif.js --all --frames         # every animation, plus PNG sequences
+```
+
+Writes to `tools/export/` (gitignored — regenerate, don't commit). GIF by
+default; `--frames` adds a numbered PNG sequence, `--still N` writes one PNG and
+no GIF.
+
+GIF is not a lossy fallback here, it is the same data model wearing a different
+header. Our animations are *a palette of at most 36 colours plus one index per
+cell*; a GIF is *a colour table of at most 256 colours plus one index per pixel*.
+So the export is a remap — no quantisation, no dithering, no colour drift — and
+the frame holds become the GIF's own per-frame delays, so it plays at the speed
+the device plays it. Every hold in the catalogue is a multiple of 10 ms and GIF
+delays are in hundredths of a second, so even the timing is exact rather than
+rounded.
+
+The encoder is hand-written, same as `lib/png.js`, to keep the tool chain free of
+`npm install`. Because a GIF that opens in a lenient viewer can still be
+malformed, correctness is checked by decoding the file back with an independent
+reader and comparing every pixel, delay, disposal byte and palette entry against
+the source JSON — the whole catalogue round-trips exactly.
+
+`--canvas WxH` letterboxes onto something that isn't square, and `--anchor
+top|middle|bottom` says where the art sits on it. That combination exists for
+watch faces. A worked example, the one it was written for — a Xiaomi Smart Band
+10 Pro, 1.74″ AMOLED at 336×480:
+
+```bash
+node export_gif.js waiting --canvas 336x480 --cell 16 --anchor bottom --still 6
+```
+
+20 cells at 16 px is 320 px of art on a 336 px-wide screen, so it fills the
+width with an 8 px margin and leaves the top third black — which is where a
+watch face puts the time. Note that the plain Smart Band 10 is a different and
+much narrower panel (212×520); the sizes are not interchangeable.
+
+For a tool that wants a sprite to position rather than a full-screen image, drop
+`--canvas` and the frames come out at the art's own size (`--cell 16 --frames`
+→ 320×320 PNGs).
+
+**`--bg` defaults to black and that is not a neutral default.** Everything here
+was drawn against an unlit AMOLED, so light colours are used freely and "empty"
+means black, not white. On a white background the pale props in `waiting` and
+`space` disappear outright. `--transparent` carries the same hazard the moment
+the viewer's background is light, which is why it is opt-in.
+
+The default selection is Nova's own drawings rather than everything, because
+those are the ones that are hers to hand to someone outside this project. The
+rest of the catalogue is Anthropic's art or claudepix's, and exporting that to
+give away is a different question from running it on our own board. The list is
+hand-maintained at the top of the script: authorship isn't a property of a
+directory, since `drawn_anims/` holds both her originals and her edits to
+scrapes.
+
 ## 3. Convert to C
 
 ```bash
