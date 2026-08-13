@@ -28,6 +28,7 @@
  *   --anchor T       top | middle | bottom on that canvas   (default bottom)
  *   --frames         also write frame-0001.png, frame-0002.png, ...
  *   --still N        write one PNG of frame N and no GIF
+ *   --rgba           write 32-bit PNGs instead of 24-bit (see writeImage below)
  *
  * On --bg: the default is black on purpose and is not a neutral choice. Every
  * animation here was drawn against an unlit AMOLED, so light colours are used
@@ -39,7 +40,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { writeRgbPng } = require('./lib/png');
+const { writeRgbPng, writeRgbaPng } = require('./lib/png');
 
 const args = process.argv.slice(2);
 const opt = (k, def) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : def; };
@@ -229,14 +230,21 @@ function rasterise(grid, side, cell, CW, CH, anchor) {
   return px;
 }
 
-const toRgbBuf = (px, CW, CH, table) => {
-  const img = Buffer.alloc(CW * CH * 3);
+// PNGs come out 24-bit by default and 32-bit under --rgba. The flag exists
+// because Xiaomi's watchface packer accepts only 32-bit PNGs and says nothing
+// when given a 24-bit one — it packs a file the watch cannot decode. Alpha is
+// 255 everywhere unless --transparent, in which case index 0 becomes clear.
+function writeImage(file, px, CW, CH, table, rgba, transIndex) {
+  const n = rgba ? 4 : 3;
+  const img = Buffer.alloc(CW * CH * n);
   for (let i = 0; i < px.length; i++) {
-    const c = table[px[i]] || [0, 0, 0];
-    img[i * 3] = c[0]; img[i * 3 + 1] = c[1]; img[i * 3 + 2] = c[2];
+    const v = px[i];
+    const c = table[v] || [0, 0, 0];
+    img[i * n] = c[0]; img[i * n + 1] = c[1]; img[i * n + 2] = c[2];
+    if (rgba) img[i * n + 3] = (transIndex >= 0 && v === transIndex) ? 0 : 255;
   }
-  return img;
-};
+  (rgba ? writeRgbaPng : writeRgbPng)(file, CW, CH, img);
+}
 
 // ── main ───────────────────────────────────────────────────────────────────
 
@@ -244,6 +252,7 @@ const OUT_DIR = path.resolve(opt('--out', path.join(__dirname, 'export')));
 const ANCHOR = opt('--anchor', 'bottom');
 const STILL = args.includes('--still') ? parseInt(opt('--still', '0'), 10) : -1;
 const TRANSPARENT = flag('--transparent');
+const RGBA = flag('--rgba');
 const BG = toRgb('#' + opt('--bg', '000000').replace('#', ''));
 
 const names = args.filter((a, i) =>
@@ -293,7 +302,7 @@ for (const name of wanted) {
       process.exit(1);
     }
     const file = path.join(OUT_DIR, `${slug}.png`);
-    writeRgbPng(file, CW, CH, toRgbBuf(frames[STILL].px, CW, CH, table));
+    writeImage(file, frames[STILL].px, CW, CH, table, RGBA, transIndex);
     console.log(`${name.padEnd(14)} ${CW}x${CH}  frame ${STILL}  ${path.relative(process.cwd(), file)}`);
     wroteAny = true;
     continue;
@@ -309,9 +318,9 @@ for (const name of wanted) {
   if (flag('--frames')) {
     const dir = path.join(OUT_DIR, slug);
     fs.mkdirSync(dir, { recursive: true });
-    frames.forEach((f, i) => writeRgbPng(
+    frames.forEach((f, i) => writeImage(
       path.join(dir, `frame-${String(i + 1).padStart(4, '0')}.png`),
-      CW, CH, toRgbBuf(f.px, CW, CH, table)));
+      f.px, CW, CH, table, RGBA, transIndex));
     console.log(`${''.padEnd(14)} + ${frames.length} PNGs in ${path.relative(process.cwd(), dir)}/`);
   }
 }

@@ -130,7 +130,11 @@ fs.rmSync(staging, { recursive: true, force: true });
 execFileSync(process.execPath, [
   path.join(__dirname, 'export_gif.js'), name,
   '--canvas', `${device.w}x${device.h}`, '--cell', String(cell),
-  '--anchor', 'bottom', '--frames', '--out', staging,
+  // --rgba because the packer takes 32-bit PNGs only. Given a 24-bit one it
+  // neither converts nor complains; it writes a .face the watch cannot decode,
+  // and the only sign is on unpacking: "image len 16773, but expected 645120",
+  // 645120 being 336*480*4. Every known-good sample project is 32-bit.
+  '--anchor', 'bottom', '--frames', '--rgba', '--out', staging,
 ], { stdio: 'inherit' });
 
 fs.rmSync(proj, { recursive: true, force: true });

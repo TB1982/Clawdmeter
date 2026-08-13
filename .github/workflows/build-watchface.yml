@@ -45,6 +45,7 @@ on:
 env:
   MI_CREATE_REF: d7aa9e682d43a2454363dbaaba809125901f7b06
   COMPILER_SHA256: bf0f7230f4fd08ed45d9a9fd1b8359a679b04b87998825a259e0ef49ba239f30
+  UNPACKER_SHA256: 8b5813e462f90f2c7609087178cc741d4600ff5f5ea802a1422526fb3740c543
 
 jobs:
   build:
@@ -95,6 +96,36 @@ jobs:
           $built = Join-Path $out $face
           if (-not (Test-Path $built)) { Write-Error "packer reported success but wrote no $face"; exit 1 }
           Write-Host "built $built ($((Get-Item $built).Length) bytes)"
+
+      # The packer is happy to write a .face the watch cannot read. It accepted a
+      # 24-bit PNG without a word and produced a file whose preview decoded to
+      # 16773 bytes where 645120 (336*480*4) was wanted — a defect invisible until
+      # someone pairs a band, sideloads it and watches nothing happen. Unpacking
+      # the result here turns that into a red build instead.
+      - name: Verify by unpacking it again
+        shell: pwsh
+        run: |
+          $url = "https://raw.githubusercontent.com/ooflet/Mi-Create/$env:MI_CREATE_REF/src/compiler/unpack.exe"
+          Invoke-WebRequest -Uri $url -OutFile unpack.exe
+          $got = (Get-FileHash unpack.exe -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $env:UNPACKER_SHA256) {
+            Write-Error "unpack.exe digest is $got, expected $env:UNPACKER_SHA256"
+            exit 1
+          }
+          $face = Get-ChildItem -Path build/watchface -Filter *.face -Recurse | Select-Object -First 1
+          $log = & .\unpack.exe $face.FullName 2>&1 | Out-String
+          Write-Host $log
+          # The unpacker reports its verdict in prose and not in an exit code, so
+          # the prose is what gets checked.
+          if ($log -notmatch 'Watch detected') {
+            Write-Error "unpacker did not recognise the file as a watchface"
+            exit 1
+          }
+          if ($log -match 'error|err,|Exception') {
+            Write-Error "unpacker could not read back what we just packed"
+            exit 1
+          }
+          Write-Host "round trip clean"
 
       - uses: actions/upload-artifact@v4
         with:
