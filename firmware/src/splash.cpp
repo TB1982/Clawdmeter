@@ -419,13 +419,37 @@ static void mini_render(splash_mini_t *m) {
         memset(m->buf, 0, (size_t)m->w * m->w * 2);
     }
     const int grid = m->grid;
+
+    // The buffer edge is a multiple of SPLASH_GRID (see splash_mini_create), and
+    // the animation's own side need not divide it: 60 into an 80px badge gives
+    // cell 1 and covers 60 of 80. So the drawn span is centred rather than left
+    // at the origin, and every write is bounded.
+    //
+    // The bound is not cosmetic. On a compact layout the corner badge is
+    // LOGO_SMALL_WIDTH = 40, so m->w is 40 and the buffer holds 1,600 uint16 —
+    // but 40/60 truncates to 0, the clamp lifts it to 1, and the old unbounded
+    // loop indexed up to 59*40+59 = 2,419. That is 1,640 bytes past the end of
+    // the allocation, on the two boards that take this layout (1.8 and 1.54,
+    // both with the PSRAM that lets a mixed-grid catalogue build at all), and
+    // reachable whenever the rate lands on group 3 and this follow_rate instance
+    // picks one of the three 60x60 animations. splash_mini_tick() renders
+    // without checking visibility, so hiding the badge does not avoid it.
+    const int span = grid * m->cell;
+    const int off  = (m->w - span) / 2;      // negative when the art overruns
+
     for (int gy = 0; gy < grid; gy++) {
         for (int gx = 0; gx < grid; gx++) {
             uint8_t code = cells[gy * grid + gx];
             uint16_t color = (pal && code < SPLASH_PALETTE_SIZE) ? pal[code] : COL_EMPTY;
             for (int dy = 0; dy < m->cell; dy++) {
-                uint16_t *dst = &m->buf[(gy * m->cell + dy) * m->w + gx * m->cell];
-                for (int dx = 0; dx < m->cell; dx++) dst[dx] = color;
+                const int y = off + gy * m->cell + dy;
+                if (y < 0 || y >= m->w) continue;
+                uint16_t *row = &m->buf[(size_t)y * m->w];
+                for (int dx = 0; dx < m->cell; dx++) {
+                    const int x = off + gx * m->cell + dx;
+                    if (x < 0 || x >= m->w) continue;
+                    row[x] = color;
+                }
             }
         }
     }

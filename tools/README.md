@@ -7,6 +7,14 @@ is the craft: which shapes survive at this size, what the preview can and cannot
 show you, and the mistakes already made and paid for. Dated, so a claim there can
 be read as history rather than as an instruction that may have gone stale.
 
+[`docs/animation-contract.md`](../docs/animation-contract.md) is the third one,
+and it is written for readers outside this repository — anything that produces
+animations for the device without being able to see `firmware/` or `tools/`.
+Grid sizes and where their truth lives, the C6 build-time refusal, what each
+size does in the corner badge and the waiting panel, and which fields reach the
+device unused. If a downstream consumer is about to copy a constant out of here,
+that is the file to point them at instead.
+
 ## 1. Scrape
 
 ```bash
