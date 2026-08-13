@@ -65,7 +65,7 @@ slot 0 is what you meet at boot, and the last slot is what loops back into it.
 | 4 | cloud | 44 | 4,410 ms | 4.54 |
 | 5 | sailing scene | 36 | 5,660 ms | 3.53 |
 | 6 | trumpet | 34 | 4,010 ms | 4.99 |
-| 7 | jump blossom | 14 | 1,860 ms | 10.75 |
+| 7 | jumping blossom | 14 | 1,860 ms | 10.75 |
 
 A ✓ means the loop divides the slot exactly, so it is never cut part-way. 7 of 24 do: hanabi, waiting, space, crab walking, work mode, dancing, this is fine.
 
