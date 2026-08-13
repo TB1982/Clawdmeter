@@ -113,6 +113,16 @@ const EXCLUDE = new Set([
   // the build unreachable.
   'dance bob',
   'work type',
+
+  // Superseded 2026-08-13 by "jump blossom", which is this animation with
+  // Nova's flower ring drawn over it. Both would otherwise be in the build and
+  // the plain one would only ever read as the same jump with something missing.
+  // Nova's call: keep the one with the flowers.
+  //
+  // Note this is an exclusion rather than a deletion — official_anims/ still
+  // holds the source, so "jump blossom" can always be rebuilt against it, and
+  // the plain jump comes back by removing this line.
+  'jumping happy',
 ]);
 
 function safeIdent(s) {

@@ -137,10 +137,21 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // thing for this band to say than a third animation of him dancing.
     // "this is fine" joined on 2026-08-10. The official three that join them
     // are the same thought — a car, a cloud and a boat are all things carrying
-    // him somewhere — and "jumping happy" ends the round on the one unguarded
-    // celebration in the whole catalogue.
+    // him somewhere — and the closing slot holds the one unguarded celebration
+    // in the whole catalogue.
+    //
+    // That slot became "jump blossom" on 2026-08-13: upstream's "jumping happy"
+    // with Nova's ring of flowers bursting off him at the apex. It replaces the
+    // plain jump rather than joining it, so the round still ends once. The plain
+    // one is excluded from the build in convert_to_c.js; keeping both would put
+    // the same jump in the round twice, the second time with something missing.
+    //
+    // It also brings her flowers back. They were retired with the rest of the
+    // claudepix cull, not for being hers but for what they sat on — "idle
+    // blossom" overlaid them on a scraped animation. On official art they are
+    // clean, and the device is still two sources and no third.
     { "surfing", "racing car", "this is fine", "cloud", "sailing scene",
-      "trumpet", "jumping happy", NULL },
+      "trumpet", "jump blossom", NULL },
 };
 
 static bool groups_resolved = false;
