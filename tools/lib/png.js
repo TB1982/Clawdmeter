@@ -36,22 +36,19 @@ function chunk(type, data) {
   return Buffer.concat([len, td, crc]);
 }
 
-/**
- * @param {string} file  destination path
- * @param {number} W     width in pixels
- * @param {number} H     height in pixels
- * @param {Buffer} img   W*H*3 bytes, RGB, row-major
- */
-function writeRgbPng(file, W, H, img) {
-  const raw = Buffer.alloc((W * 3 + 1) * H);
+// Colour type 2 is truecolour, 6 is truecolour with alpha. Everything else in
+// the header is identical, so both writers share this.
+function writePng(file, W, H, img, channels, colourType) {
+  const stride = W * channels;
+  const raw = Buffer.alloc((stride + 1) * H);
   for (let y = 0; y < H; y++) {
-    raw[y * (W * 3 + 1)] = 0;                     // filter type 0 (None)
-    img.copy(raw, y * (W * 3 + 1) + 1, y * W * 3, (y + 1) * W * 3);
+    raw[y * (stride + 1)] = 0;                    // filter type 0 (None)
+    img.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
   }
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(W, 0); ihdr.writeUInt32BE(H, 4);
-  ihdr[8] = 8;    // bit depth
-  ihdr[9] = 2;    // colour type: truecolour
+  ihdr[8] = 8;              // bit depth
+  ihdr[9] = colourType;
   fs.writeFileSync(file, Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', ihdr),
@@ -60,4 +57,27 @@ function writeRgbPng(file, W, H, img) {
   ]));
 }
 
-module.exports = { writeRgbPng };
+/**
+ * @param {string} file  destination path
+ * @param {number} W     width in pixels
+ * @param {number} H     height in pixels
+ * @param {Buffer} img   W*H*3 bytes, RGB, row-major
+ */
+function writeRgbPng(file, W, H, img) {
+  writePng(file, W, H, img, 3, 2);
+}
+
+/**
+ * Same, with an alpha channel. Needed because Xiaomi's watchface packer only
+ * accepts 32-bit PNGs: hand it a 24-bit one and it neither converts nor
+ * complains — it packs something the watch cannot decode, and the failure only
+ * surfaces on unpacking as "image len 16773, but expected 645120" (that being
+ * 336*480*4). Every known-good sample project is colour type 6.
+ *
+ * @param {Buffer} img   W*H*4 bytes, RGBA, row-major
+ */
+function writeRgbaPng(file, W, H, img) {
+  writePng(file, W, H, img, 4, 6);
+}
+
+module.exports = { writeRgbPng, writeRgbaPng };

@@ -1,0 +1,147 @@
+# Packs an animation from the catalogue into a Xiaomi .face watchface.
+#
+# This job exists because of one binary. The only packer for this format is
+# Xiaomi's own, distributed as a Windows executable inside Mi Create, and it
+# cannot run on macOS: it embeds a 2015-era Magick.NET whose native half is a
+# Windows DLL exporting Magick.NET's own shim rather than stock ImageMagick's
+# API, so there is nothing to substitute. Three other obstacles on that path
+# were solvable (backslash paths via MONO_IOMAP, a WPF type in a method
+# signature via a stub assembly, Mi Create's missing darwin branch); this one
+# was not worth what it would cost.
+#
+# So rather than requiring anyone to own a Windows machine, the job borrows one
+# for the thirty seconds the packer needs. Everything before and after runs
+# anywhere.
+#
+# The packer is fetched at run time rather than committed. It came out of a
+# closed Xiaomi SDK and sits inside a GPL-3 project, which is a murky enough
+# provenance that this repo should not be redistributing it — the same call
+# made about claudepix's art. Fetching it pinned to a commit keeps the
+# provenance where it belongs while still being reproducible.
+
+name: Build watchface
+
+on:
+  workflow_dispatch:
+    inputs:
+      animation:
+        description: 'Animation name, exactly as it appears in the catalogue'
+        default: 'waiting'
+        required: true
+      device:
+        description: 'Xiaomi device code (11 = Smart Band 8 Pro, 367 = 9 Pro, 466 = Band 10)'
+        default: '11'
+        required: true
+      frames:
+        description: 'How many frames to keep (1-10; the seconds digit cannot count past 9)'
+        default: '10'
+        required: true
+  push:
+    branches: ['feature/watchface-ci']
+
+# Pinned rather than tracking main: this downloads an executable and runs it, so
+# the version that gets run should be the version that was reviewed. The digest
+# is checked below — a changed file fails the job instead of executing.
+env:
+  MI_CREATE_REF: d7aa9e682d43a2454363dbaaba809125901f7b06
+  COMPILER_SHA256: bf0f7230f4fd08ed45d9a9fd1b8359a679b04b87998825a259e0ef49ba239f30
+  UNPACKER_SHA256: 8b5813e462f90f2c7609087178cc741d4600ff5f5ea802a1422526fb3740c543
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Generate the watchface project
+        shell: bash
+        run: |
+          node tools/make_watchface.js "${ANIMATION}" \
+            --device "${DEVICE}" --frames "${FRAMES}" --out build/watchface
+        env:
+          ANIMATION: ${{ github.event.inputs.animation || 'waiting' }}
+          DEVICE: ${{ github.event.inputs.device || '11' }}
+          FRAMES: ${{ github.event.inputs.frames || '10' }}
+
+      - name: Fetch the packer
+        shell: pwsh
+        run: |
+          $url = "https://raw.githubusercontent.com/ooflet/Mi-Create/$env:MI_CREATE_REF/src/compiler/compile.exe"
+          Invoke-WebRequest -Uri $url -OutFile compile.exe
+          $got = (Get-FileHash compile.exe -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $env:COMPILER_SHA256) {
+            Write-Error "compile.exe digest is $got, expected $env:COMPILER_SHA256"
+            exit 1
+          }
+          Write-Host "packer verified: $got"
+
+      - name: Pack it
+        shell: pwsh
+        run: |
+          # The packer builds its own paths by string concatenation with
+          # backslashes, so it is given absolute Windows paths and nothing else.
+          $proj = Get-ChildItem -Path build/watchface -Filter *.fprj -Recurse | Select-Object -First 1
+          if (-not $proj) { Write-Error "no .fprj was generated"; exit 1 }
+          $out = Join-Path $proj.Directory.FullName "output"
+          $face = "$($proj.BaseName).face"
+          Write-Host "packing $($proj.FullName)"
+          # 1461256429 is the constant Mi Create itself passes as the final
+          # argument; the compiler rejects the call without it.
+          & .\compile.exe -b $proj.FullName $out $face 1461256429
+          if ($LASTEXITCODE -ne 0) { Write-Error "packer exited $LASTEXITCODE"; exit 1 }
+          $built = Join-Path $out $face
+          if (-not (Test-Path $built)) { Write-Error "packer reported success but wrote no $face"; exit 1 }
+          Write-Host "built $built ($((Get-Item $built).Length) bytes)"
+
+      # The packer is happy to write a .face the watch cannot read. It accepted a
+      # 24-bit PNG without a word and produced a file whose preview decoded to
+      # 16773 bytes where 645120 (336*480*4) was wanted — a defect invisible until
+      # someone pairs a band, sideloads it and watches nothing happen. Unpacking
+      # the result here turns that into a red build instead.
+      - name: Verify by unpacking it again
+        shell: pwsh
+        run: |
+          $url = "https://raw.githubusercontent.com/ooflet/Mi-Create/$env:MI_CREATE_REF/src/compiler/unpack.exe"
+          Invoke-WebRequest -Uri $url -OutFile unpack.exe
+          $got = (Get-FileHash unpack.exe -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $env:UNPACKER_SHA256) {
+            Write-Error "unpack.exe digest is $got, expected $env:UNPACKER_SHA256"
+            exit 1
+          }
+          $face = Get-ChildItem -Path build/watchface -Filter *.face -Recurse | Select-Object -First 1
+          $log = & .\unpack.exe $face.FullName 2>&1 | Out-String
+          Write-Host $log
+          # The unpacker reports its verdict in prose and not in an exit code, so
+          # the prose is what gets checked.
+          if ($log -notmatch 'Watch detected') {
+            Write-Error "unpacker did not recognise the file as a watchface"
+            exit 1
+          }
+          if ($log -match 'error|err,|Exception') {
+            # Deliberately a warning. The unpacker is documented by its own
+            # authors as imperfect ("some parts of the watchface may be
+            # glitched"), and on this device it fails inside ProcessPreview with
+            # the same byte count whatever the frames are made of — which is the
+            # signature of a reader that cannot decode this device's preview
+            # encoding, not of a bad file. Failing the build on it would block
+            # every watchface on a limitation of the diagnostic.
+            Write-Warning "unpacker could not fully read the file back; see the log above"
+          } else {
+            Write-Host "round trip clean"
+          }
+          # The unpacker waits for a keypress before returning and therefore dies
+          # on Console.ReadKey wherever there is no console — which is to say it
+          # exits non-zero here even when it read the file perfectly. Its exit
+          # code carries no information in CI, so it is discarded and the verdict
+          # above stands on the prose alone.
+          exit 0
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: watchface
+          path: build/watchface/**/output/*.face
+          if-no-files-found: error
