@@ -149,11 +149,15 @@ pick.forEach((f, i) => fs.copyFileSync(
 fs.copyFileSync(path.join(proj, 'images', 'f0.png'), path.join(proj, 'images', 'preview.png'));
 fs.rmSync(staging, { recursive: true, force: true });
 
+// An ImageList picks its frame with Index_Src. Value_Src is the numeric widget's
+// attribute (Shape 32) and setting it here packs to a NullReferenceException with
+// no hint as to which attribute was wrong — the shapes do not share a schema.
+// Alignment/Spacing/Blanking belong to Shape 32 as well and are left off.
 const bitmapList = pick.map((_, i) => `(${i}):f${i}.png`).join('|');
 const xml = `<?xml version="1.0" encoding="utf-8"?>
-<FaceProject DeviceType="${deviceId}" Id="">
+<FaceProject DeviceType="${deviceId}">
   <Screen Title="${anim.name}" Bitmap="preview.png">
-    <Widget Shape="31" Name="anim" BitmapList="${bitmapList}" X="0" Y="0" Width="${device.w}" Height="${device.h}" Alpha="255" Alignment="0" DefaultIndex="0" Value_Src="${SECOND_LOW}" Spacing="0" Blanking="0" Visible_Src="0"/>
+    <Widget Shape="31" Name="anim" X="0" Y="0" Width="${device.w}" Height="${device.h}" Alpha="255" Visible_Src="0" Index_Src="${SECOND_LOW}" DefaultIndex="0" BitmapList="${bitmapList}"/>
   </Screen>
 </FaceProject>
 `;
