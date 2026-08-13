@@ -140,18 +140,27 @@ static const char* GROUP_NAMES[GROUP_COUNT][GROUP_MAX] = {
     // him somewhere — and the closing slot holds the one unguarded celebration
     // in the whole catalogue.
     //
-    // That slot became "jump blossom" on 2026-08-13: upstream's "jumping happy"
-    // with Nova's ring of flowers bursting off him at the apex. It replaces the
-    // plain jump rather than joining it, so the round still ends once. The plain
-    // one is excluded from the build in convert_to_c.js; keeping both would put
-    // the same jump in the round twice, the second time with something missing.
+    // That slot became "jumping blossom" on 2026-08-13: upstream's "jumping
+    // happy" with Nova's ring of flowers bursting off him at the apex. It
+    // replaces the plain jump rather than joining it, so the round still ends
+    // once. The plain one is excluded from the build in convert_to_c.js; keeping
+    // both would put the same jump in the round twice, the second time with
+    // something missing.
     //
     // It also brings her flowers back. They were retired with the rest of the
     // claudepix cull, not for being hers but for what they sat on — "idle
     // blossom" overlaid them on a scraped animation. On official art they are
     // clean, and the device is still two sources and no third.
+    //
+    // The ring is uneven on purpose. Its radii run 8.5 to 13.5 and its angular
+    // gaps 23 to 59 degrees, and both were regularised once — onto a true circle
+    // at frame 3 and an ellipse at frame 4, which took the radius spread from
+    // 1.44 to 0.30. It was reverted the same day at Nova's call, and she was
+    // right: petals leaving at whatever angle and speed they were pushed is what
+    // reads as a burst, and even spacing reads as an arrangement. The measurement
+    // improved and the animation got worse. Do not "fix" it again.
     { "surfing", "racing car", "this is fine", "cloud", "sailing scene",
-      "trumpet", "jump blossom", NULL },
+      "trumpet", "jumping blossom", NULL },
 };
 
 static bool groups_resolved = false;
