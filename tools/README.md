@@ -129,46 +129,75 @@ suggesting it.
 It is checked in rather than kept in `~/.claude/`, so it travels with the repo
 and can be corrected like any other file here when the pipeline changes.
 
-## 2d. Import the official art as a 60×60 template
+## 2d. Import the official art
 
 ```bash
-node import_official.js --list                    # what's there, and what it costs
-node import_official.js --name "sailing scene"    # one, into tools/official_anims/
+node import_official.js --list                      # what's there, sized and priced
+node import_official.js --all --skip "jumping"      # what actually shipped
+node import_official.js --name "sailing scene"      # just one
 ```
 
 Upstream replaced the claudepix animations with official Anthropic art on a
-**60×60 grid**, storing each one as a bounding-box crop plus an origin on a
-shared 55×37 stage. This flattens that back to a full 60×60 grid — the crop
-placed where the device actually draws it — so the result opens in the editor
-and renders in our engine unchanged. `splash_anim_def_t` has carried a
-per-animation `grid` field since the stride moved off the array type, so nothing
-in the firmware needed changing to accept 60.
+**60×60 grid**, storing each as a bounding-box crop plus an origin on a shared
+55×37 stage. This flattens that back into a whole grid — the crop placed where
+the device draws it — so the result opens in the editor and renders in our
+engine unchanged. `splash_anim_def_t` has carried a per-animation `grid` field
+since the stride moved off the array type, so no firmware change was needed.
 
-**The empty space is the point.** Their stage is 440×296 of a 480×480 panel and
-their Clawd is 192×128 inside it, so most of the screen goes unused. At 60×60 a
-cell is 8px against our 24 — the same physical area at **9× the cells**, which
-is room for detail rather than a smaller picture. A 20×20 animation upscales
-into it exactly (each cell becomes a 3×3 block, nothing moves), so an existing
-drawing can be grown and then refined instead of redrawn.
+### Which grid: `--grid auto` (the default)
 
-Three things to know before shipping one:
+40×40 where the crop fits, 60×60 for the three too wide for it (`cloud` at 41,
+`racing car` and `trumpet` at 50). **40 wins on both axes at once**, which is
+the counterintuitive part: the panel is 480 px either way, so fewer cells means
+each is bigger. Their Clawd goes from 192×128 screen pixels to **288×192**, and
+a frame costs 1,600 bytes instead of 3,600. All 17 at 60 would be 1,684 KB; the
+16 that shipped, mostly at 40, are **959 KB**.
 
-- **Flash.** A frame is `side²` bytes: 3,600 at 60×60 against 400. `sailing
-  scene` is 127 KB, all seventeen come to 1,684 KB, and the 2.16 build has about
-  1.4 MB spare. A few, not all.
-- **C6 boards stop building.** PSRAM-less boards render one pixel per cell and
-  let LVGL upscale, so the scale factor is a property of the grid side; mixing
-  sizes in one build trips the `static_assert` in `splash.cpp`. It fails at
-  compile time with the reason — intended behaviour, not a bug.
+The grid is a resolution, not a canvas. Pick the smallest one the art fits in.
+
+### Placement
+
+- **Vertical**: `side - side/5 - h`. Every one of the 17 has `oy + h == 37`, so
+  they are anchored to the bottom of the *stage* — which is 12 rows of 60 above
+  the bottom of the grid. That margin is deliberate (the panel's corners are
+  rounded), and scaling it with the grid reproduces upstream's placement exactly
+  for all 17 at 60 while landing the same 96 px of floor at 40. Anchoring to the
+  grid instead stands him on the last pixel row; the simulator caught that in
+  one screenshot.
+- **Horizontal at 60**: upstream's stage anchoring, including its edge snaps —
+  art touching a stage edge was drawn to hang off the *screen* edge (`lurking`
+  peeks in from the left), so it goes to the true edge.
+- **Horizontal at 40**: the stage is wider than the grid, so it keeps what the
+  stage was *for* — Clawd landing in the same place every time. He occupies 24
+  cells from stage x15, so every crop shifts by `((side - 24) / 2) - 15`, which
+  is −7. Two crops (`laptop`, `sailing scene`) are too wide to honour it exactly
+  and are clamped by 2 cells rather than pushed off-grid; the JSON's
+  `description` says so.
+
+### Two things that do not survive
+
+- **C6 boards stop building** once the catalogue mixes grid sizes. PSRAM-less
+  boards render one pixel per cell and let LVGL upscale, so the scale factor is
+  a property of the grid side; mixing trips the `static_assert` in `splash.cpp`.
+  It fails at compile time with the reason — intended, not a bug.
 - **Loop regions are lost.** Upstream plays intro → loop (held ~6 s) → outro and
-  never hard-cuts between animations; ours loops the whole file, so an imported
-  animation replays its intro and outro every pass. The frame numbers are
-  recorded in the JSON's `description` rather than dropped silently.
+  never hard-cuts; ours loops the whole file, so an import replays its intro and
+  outro every pass. The frame numbers go into the JSON's `description` rather
+  than being dropped silently.
 
-`tools/official_anims/` is gitignored: the art is Anthropic's, and it is one
-command away from upstream's own copy, so committing it would be redistributing
-art to save nothing. Edited derivatives go to `drawn_anims/` like any other
-drawing.
+`tools/official_anims/` is a tracked source directory like the other three. It
+was briefly gitignored on the reasoning that the art is Anthropic's and is one
+command from upstream — which was wrong, because the moment any of it ships the
+generated `firmware/src/splash_animations.h` carries the same pixels and *that*
+is committed. Ignoring the JSON redistributed nothing less and cost a fresh
+clone the ability to rebuild the firmware it already contained.
+
+The imports are embedded in the editor too, which is the point of importing them
+— open one, draw into the space around it, export to `drawn_anims/`. That took
+`anim_editor.html` from 320 KB to **1,276 KB**, because a 40×40 frame packs to
+1,600 characters and a 60×60 one to 3,600. It is a single local file with no
+network, so a megabyte of string literal costs tens of milliseconds at load;
+worth knowing before wondering why the file grew fourfold.
 
 ## 3. Convert to C
 
@@ -232,7 +261,8 @@ rebuild the firmware.
 **As of 2026-08-12 the firmware carries no claudepix material.** All of it —
 the scrapes, Nova's corrections to them, and the three animations that pose
 claudepix frames under her props — is listed in `EXCLUDE` in `convert_to_c.js`
-and is not compiled in. What ships is the ten animations Nova drew.
+and is not compiled in. What ships is the ten animations Nova drew and sixteen
+of Anthropic's own, imported by `import_official.js` — two sources, no third.
 
 The reason is provenance, not quality: [claudepix](https://claudepix.vercel.app)
 by [@amaanbuilds](https://x.com/amaanbuilds) **states no license at all**, which

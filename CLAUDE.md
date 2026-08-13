@@ -19,6 +19,8 @@ Plus one non-hardware target: `boards/sim/` — **native desktop simulator** (SD
 
 **C6 ports have no PSRAM** — shared code gates on `BOARD_HAS_PSRAM` (absent on C6) to use `MALLOC_CAP_INTERNAL` for LVGL/splash buffers, and the `screenshot` serial command is disabled (`LV_USE_SNAPSHOT=0`), so UI changes on a C6 board must be eyeballed on hardware, not auto-captured.
 
+> **The two C6 envs do not build as of 2026-08-12, on purpose.** The catalogue now mixes 20×20, 40×40 and 60×60 animations. PSRAM-less boards render one pixel per cell and let LVGL upscale, so the scale factor is a property of the grid side and mixing sizes would mean re-scaling on every animation change — on the one render path neither the screenshot command nor a host test can check. The `static_assert` at the top of `splash.cpp` stops the build with that reasoning rather than letting it render wrong. To bring them back, wire up per-animation `lv_image_set_scale` and verify it on real C6 hardware, or keep a C6 build to one grid size.
+
 The shared code calls a small HAL (`firmware/src/hal/`) that each board implements: display, touch, input, power, IMU. Optional features are guarded by `BoardCaps` (runtime) and `BOARD_HAS_*` (compile-time) rather than `#ifdef BOARD_*`.
 
 Connects to a host daemon over BLE; daemon polls Anthropic API for usage data. This file is for future Claude Code sessions to bootstrap quickly. Read this first.

@@ -15,10 +15,16 @@ const path = require('path');
 const args = process.argv.slice(2);
 const opt = (k, def) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : def; };
 
-// Comma-separated so hand-composed animations live in their own directory:
-// the scraper owns claudepix_data/ outright and is free to wipe it, while
-// custom_anims/ (built by make_custom_anims.js) survives a re-scrape.
-const IN_DIRS = opt('--in', ['claudepix_data', 'custom_anims', 'drawn_anims'].join(','))
+// Comma-separated, and one directory per source of the art, because provenance
+// is the thing that most needs to stay obvious here:
+//   claudepix_data/  the scraper owns outright and is free to wipe
+//   custom_anims/    make_custom_anims.js builds, and survives a re-scrape
+//   drawn_anims/     Nova's own drawings and her edits to the above
+//   official_anims/  import_official.js writes, from Anthropic's own art
+// Later directories win on a name collision, so drawn_anims/ overrides a
+// scrape and official_anims/ would override a drawing of the same name.
+const IN_DIRS = opt('--in',
+    ['claudepix_data', 'custom_anims', 'drawn_anims', 'official_anims'].join(','))
   .split(',').map(d => path.resolve(__dirname, d.trim()));
 const OUT_FILE = path.resolve(opt('--out',
   path.join(__dirname, '..', 'firmware', 'src', 'splash_animations.h')));

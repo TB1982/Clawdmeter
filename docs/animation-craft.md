@@ -251,6 +251,23 @@ carry the corner badge at all: 80 screen pixels across 60 cells is 1.3 px/cell,
 well under the 4 px/cell where the section above found the limit of legibility.
 Whatever is drawn at 60 is a splash-only animation. *(2026-08-12)*
 
+**Corollary, same day: the biggest grid that fits is usually the wrong one.**
+Importing the official art, 14 of the 17 crops fit a 40×40 grid, and putting
+them there beat 60×60 on both axes at once — the character goes from 192×128
+screen pixels to 288×192, and a frame costs 1,600 bytes instead of 3,600.
+Bigger *and* cheaper, because the grid is a resolution, not a canvas size: the
+panel is 480 px either way, so fewer cells means each one is larger. Pick the
+smallest grid the art fits in, not the largest the pipeline allows.
+
+**And a margin is content.** Placing those imports, "bottom-anchored" was read
+as the bottom of the grid, which stood him on the last pixel row of a panel with
+rounded corners. Upstream anchors to the bottom of its *stage*, which sits 12
+rows of 60 above the grid's bottom edge — 96 px of deliberate floor. Scaling
+that margin with the grid (`side/5`) reproduces upstream's placement exactly for
+all 17 at 60, and lands the same 96 px at 40. The empty rows under his feet were
+not spare room to reclaim; they were the reason he looked like he was standing
+somewhere. *(2026-08-12)*
+
 ---
 
 ## Timing
