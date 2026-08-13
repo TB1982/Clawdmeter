@@ -232,6 +232,34 @@ One distinction worth preserving in a user-facing picker: `Official` records
 their own drawing under it is mislabelling its source, so it is reasonable to
 show it as a filter but not offer it as a choice.
 
+### `description` is worse: nothing reads it and the editor overwrites it
+
+It is not in `splash_anim_def_t` at all — `convert_to_c.js` never emits it, so
+unlike `category` it does not even reach the binary. `build_editor_samples.js`
+does not pack it either, so the editor's samples do not carry one.
+
+Five tools **write** it (`grid_image_to_anim.js`, `make_custom_anims.js`,
+`import_official.js`, `makebead_to_anim.js`, and the editor itself) and nothing
+anywhere reads it.
+
+The part that matters for a downstream editor: **ours overwrites it on every
+export** with a fixed string (`anim_editor.html:1612`):
+
+```js
+description: `Drawn in the Clawdmeter editor: ${frames.length} frames.`,
+```
+
+So it is not a place to keep anything. Text a user types there is lost the next
+time the file passes through our editor, and it never reaches the device by any
+route. If your rewrite offers a description field, either keep it in your own
+storage or expect it to be destroyed on the next round trip.
+
+This has already cost something once. A note explaining why one animation's
+flower ring is deliberately uneven was written into this field, where it was
+both unread and one export away from deletion; the copy that survives is the
+comment beside the name in `splash.cpp`. **Facts that must outlive a file belong
+in the firmware source, not in the animation's metadata.**
+
 ---
 
 ## 5. What names the firmware asks for
