@@ -228,8 +228,21 @@ the source JSON — the whole catalogue round-trips exactly.
 
 `--canvas WxH` letterboxes onto something that isn't square, and `--anchor
 top|middle|bottom` says where the art sits on it. That combination exists for
-watch faces: `--canvas 336x480 --cell 16 --anchor bottom` leaves the top 40%
-black, which is where a watch face wants to put the time.
+watch faces. A worked example, the one it was written for — a Xiaomi Smart Band
+10 Pro, 1.74″ AMOLED at 336×480:
+
+```bash
+node export_gif.js waiting --canvas 336x480 --cell 16 --anchor bottom --still 6
+```
+
+20 cells at 16 px is 320 px of art on a 336 px-wide screen, so it fills the
+width with an 8 px margin and leaves the top third black — which is where a
+watch face puts the time. Note that the plain Smart Band 10 is a different and
+much narrower panel (212×520); the sizes are not interchangeable.
+
+For a tool that wants a sprite to position rather than a full-screen image, drop
+`--canvas` and the frames come out at the art's own size (`--cell 16 --frames`
+→ 320×320 PNGs).
 
 **`--bg` defaults to black and that is not a neutral default.** Everything here
 was drawn against an unlit AMOLED, so light colours are used freely and "empty"
