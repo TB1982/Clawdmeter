@@ -44,14 +44,29 @@ between them has to go via 20, and 40 → 20 discards detail.
 one base-36 character; index 35 (`'z'`) is the largest that survives the round
 trip. Above that the real ceiling is 255, since cells are `uint8_t`.
 
-### The one copy that cannot be removed
+### The copies, and which of them are checked
 
 `anim_editor.html` cannot `require()` anything — it has to open from `file://`
 as a single document, which is the property the whole editor is built around. So
 it keeps its own `PALETTE_MAX` and `GRID_SIZES`, and `build_editor_samples.js`
 compares them against `format.js` on every run and refuses to write if they
-disagree. If VAS embeds the editor, that check is what keeps the embedded copy
-honest — run it in CI.
+disagree.
+
+**That check only covers this repository's copy.** It reads
+`anim_editor.html`; it cannot see a reimplementation.
+
+- **If you run our editor** — embedded, loaded, actually executed — the check
+  travels with it. Run `node tools/build_editor_samples.js` in CI and a drift
+  fails the build.
+- **If you reimplemented it** — which VAS did; the HTML in their tree is a
+  read-only snapshot that never executes — **nothing checks your constants.**
+  Yours are exactly the copies described at the top of this file: they will not
+  fail when they drift, they will disagree, and the disagreement will surface as
+  a drawing that the converter rejects or the device renders wrong.
+
+For that case the answer is not a better check, it is not holding a copy at all:
+read the values from this document at the moment you need them, and cite it
+rather than restating it. VAS's own conclusion, and it is the right one.
 
 **Anything the editor can draw, the converter accepts and the device renders.**
 No size is editor-only. But see §2 before assuming that means every board.
@@ -129,20 +144,38 @@ that exist today:
 
 | slot | requested px | actual `m->w` | 20×20 | 40×40 | 60×60 |
 |---|---|---|---|---|---|
-| corner badge, large layout | 80 (`logo.h:4`) | 80 | fills | fills | **60 of 80** |
-| corner badge, compact layout | 40 (`logo.h:1210`) | 40 | fills | fills | **cropped to 40 of 60** |
-| waiting panel, large layout | 160 (`ui.cpp:104`) | 160 | fills | fills | **120 of 160** |
-| waiting panel, compact layout | 96 (`ui.cpp:168`) | **80** | fills | fills | **60 of 80** |
+| corner badge, large layout | 80 (`logo.h:4`) | 80 | fills | fills | whole, 60 of 80 px |
+| corner badge, compact layout | 40 (`logo.h:1210`) | 40 | fills | fills | **cropped — middle 40×40 only** |
+| waiting panel, large layout | 160 (`ui.cpp:104`) | 160 | fills | fills | whole, 120 of 160 px |
+| waiting panel, compact layout | 96 (`ui.cpp:168`) | **80** | fills | fills | whole, 60 of 80 px |
 
-Two things to read off that table:
+"whole" means every cell is drawn, centred, at a smaller size. "cropped" means
+cells outside the buffer are discarded — see the second bullet below.
 
-- **60 is splash-only in practice.** In every mini it renders undersized —
-  centred, on a black field, at 75% or less. It is not rejected and nothing
-  crashes; it just looks smaller than the slot. If your UI lets a user assign an
-  animation to the badge or the waiting panel, 60 is the size to disallow there,
-  because the device will not tell them.
+Three things to read off that table, and the first two are different failures:
+
+- **60 renders undersized in three of the four slots.** The whole frame is
+  drawn, centred on a black field, at 75% of the slot or less. Nothing is
+  missing; it is just small.
+- **In the fourth it is cropped, and content is lost.** The compact badge has
+  `m->w = 40`, so `40 / 60` truncates to 0 and the clamp lifts the cell to 1 —
+  a 60-cell span into a 40 px canvas. The outer 10 cells on every side fall
+  outside the buffer and are skipped, leaving **the middle 40×40 of a 60×60
+  frame**. Anything drawn near the edges is simply not there. (Before
+  2026-08-13 this case overflowed the heap instead; see below.)
 - **96 becomes 80.** `96 / 20` truncates to 4, so the compact waiting panel is
   really 80 px. That surprises people; it is the same integer division.
+
+**So: treat 60 as splash-only.** It is not rejected and nothing crashes, so if
+your UI lets a user assign an animation to the badge or the waiting panel, 60 is
+the size to disallow there — the device will not tell them, and on one of the
+four slots it will quietly discard the edges of their drawing.
+
+The renderer scales by whole-cell block fill, which is why a non-dividing size
+has nowhere to go. Sampling per output pixel instead (`src = y * grid / w`)
+would draw every size whole in every slot and is identical to block fill
+wherever the sizes already divide — it is the fix that would retire this whole
+section. It has not been done.
 
 Compact layout is `H < 460`, which today means the 1.8 (368×448) and the 1.54
 (240×240).
@@ -198,6 +231,34 @@ One distinction worth preserving in a user-facing picker: `Official` records
 **provenance** ("this came from Anthropic"), not a kind of motion. A user filing
 their own drawing under it is mislabelling its source, so it is reasonable to
 show it as a filter but not offer it as a choice.
+
+### `description` is worse: nothing reads it and the editor overwrites it
+
+It is not in `splash_anim_def_t` at all — `convert_to_c.js` never emits it, so
+unlike `category` it does not even reach the binary. `build_editor_samples.js`
+does not pack it either, so the editor's samples do not carry one.
+
+Five tools **write** it (`grid_image_to_anim.js`, `make_custom_anims.js`,
+`import_official.js`, `makebead_to_anim.js`, and the editor itself) and nothing
+anywhere reads it.
+
+The part that matters for a downstream editor: **ours overwrites it on every
+export** with a fixed string (`anim_editor.html:1612`):
+
+```js
+description: `Drawn in the Clawdmeter editor: ${frames.length} frames.`,
+```
+
+So it is not a place to keep anything. Text a user types there is lost the next
+time the file passes through our editor, and it never reaches the device by any
+route. If your rewrite offers a description field, either keep it in your own
+storage or expect it to be destroyed on the next round trip.
+
+This has already cost something once. A note explaining why one animation's
+flower ring is deliberately uneven was written into this field, where it was
+both unread and one export away from deletion; the copy that survives is the
+comment beside the name in `splash.cpp`. **Facts that must outlive a file belong
+in the firmware source, not in the animation's metadata.**
 
 ---
 
