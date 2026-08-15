@@ -158,6 +158,22 @@ console.log('\npublished copy:');
     check('published copy is the same editor, only the samples differ',
           strip(p) === strip(html));
   }
+
+  // The editor was published at docs/tools/anim_editor.html once, before Pages
+  // moved to serve docs/ as the root. That URL is out in the world, so the path
+  // has to keep answering — with a redirect, and only a redirect. If a build
+  // ever wrote the editor there instead, the old URL would quietly go back to
+  // serving all 45 animations from the address people already have.
+  const redirect = path.join(__dirname, '..', 'docs', 'tools', 'anim_editor.html');
+  if (!fs.existsSync(redirect)) {
+    check('the old editor URL still answers (docs/tools/anim_editor.html)', false);
+  } else {
+    const r = fs.readFileSync(redirect, 'utf8');
+    check('the old editor URL redirects to the published copy',
+          r.includes('../anim_editor.html') && /http-equiv="refresh"/.test(r));
+    check('the old editor URL serves a redirect, not a copy of the editor',
+          !r.includes('BEGIN-SAMPLES'));
+  }
 }
 
 console.log(fail ? `\n${fail} FAILED` : '\nall checks passed');
