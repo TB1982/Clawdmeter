@@ -91,17 +91,28 @@ for (const [a, b] of pairs) {
 }
 
 // 4. Constants agree with the shared format module.
-const {PALETTE_SIZE, GRID_SIZES} = require('./lib/format.js');
+const {PALETTE_SIZE, GRID_SIZES, CLIP_VERSION} = require('./lib/format.js');
 console.log('\nconstants:');
 check(`GRID_SIZES matches format.js (${GRID_SIZES.join(', ')})`,
       (html.match(/const GRID_SIZES = \[([^\]]*)\];/) || [])[1].replace(/\s+/g,' ').trim()
         === GRID_SIZES.join(', '));
 check(`PALETTE_MAX matches format.js (${PALETTE_SIZE})`,
       (html.match(/const PALETTE_MAX = (\d+);/) || [])[1] === String(PALETTE_SIZE));
+check(`CLIP_VERSION matches format.js (${CLIP_VERSION})`,
+      (html.match(/const CLIP_VERSION = (\d+);/) || [])[1] === String(CLIP_VERSION));
+// The contract document is the copy another program reads — VAS mirrors this
+// constant by regexing that file, not this repo's source. A version bump that
+// stops at the code is a bump the consumer never hears about.
+check(`docs/animation-contract.md § 6 states CLIP_VERSION ${CLIP_VERSION}`,
+      new RegExp(`\\|\\s*\`CLIP_VERSION\`\\s*\\|\\s*${CLIP_VERSION}\\s*\\|`)
+        .test(fs.readFileSync(path.join(__dirname, '..', 'docs', 'animation-contract.md'), 'utf8')));
 check('the 60 option exists in the size select',
       /<option value="60">/.test(html));
 check('badResize exists in all four locales',
       (html.match(/badResize:/g) || []).length === 4);
+check('the clipboard strings exist in all four locales',
+      ['clipCopied', 'clipPasted', 'clipPastedNew', 'clipFull', 'clipNewer']
+        .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
 
 console.log(fail ? `\n${fail} FAILED` : '\nall checks passed');
 process.exit(fail ? 1 : 0);

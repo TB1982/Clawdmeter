@@ -289,10 +289,107 @@ the build. Run it after any rename.
 | `SPLASH_GRID_MAX` | generated | `splash_animations.h` |
 | `SPLASH_PALETTE_SIZE` | 36 | generated from `format.js` |
 | rate groups × slots | 4 × 9 | `splash.cpp:63` |
+| `CLIP_VERSION` | 1 | `tools/lib/format.js` (see § 7) |
 
 A frame costs `side * side` bytes of flash: 400 at 20, 1,600 at 40, 3,600 at 60.
 A 25-frame animation is 10 KB, 40 KB or 90 KB. Fine for a few, not for all — the
 current catalogue is 26 animations at 84.8% of a 3,342,336-byte partition.
+
+---
+
+## 7. The frame-fragment clipboard payload
+
+A whole animation already crosses program boundaries as JSON — the editor's
+"copy to clipboard" writes one, and a consumer pastes it into its own import
+box. This section is about the smaller unit: **one rectangle lifted out of one
+frame**, so a shape drawn in one editor can be ⌘V'd into another.
+
+The carrier is the system clipboard's `text/plain`, holding one line of JSON:
+
+```json
+{"clawdclip":1,"r":8,"c":12,"h":3,"w":4,
+ "colors":["transparent","#DE7552","#FFD98A"],
+ "cells":[[0,1,1,0],[1,2,2,1],[0,1,1,0]]}
+```
+
+| field | meaning |
+|---|---|
+| `clawdclip` | format version — `CLIP_VERSION` in `tools/lib/format.js` |
+| `r`, `c` | origin of the fragment in the source frame: `r` = row, `c` = column |
+| `h`, `w` | rows and columns of `cells` |
+| `colors` | the colours this fragment uses, re-indexed from 0. `colors[0]` is always `"transparent"` |
+| `cells` | `h` rows of `w` integers, each an index into `colors` |
+
+### Why the payload carries colours and not palette indices
+
+An index is meaningless outside the document it came from: index 5 is a pink in
+one animation and a blue in the next. Carrying the hex makes the fragment
+self-contained, and it is what lets the receiver do an **exact string match**
+against its own palette rather than guessing.
+
+That distinction matters more than it looks. A consumer of this format may well
+have a rule against inferring palette indices from pixels — VAS does, because
+two palette entries that happen to share an RGB value are indistinguishable once
+flattened. This payload never asks anyone to infer anything: the sender already
+knows which entry each cell is and names it.
+
+### Merging into the receiver's palette
+
+Per colour, in order: exact hex match → reuse that index. No match and the
+palette has room → append. **No match and the palette is full → reject the whole
+paste**, and say how many colours over it was.
+
+Rejecting is deliberate. Substituting the nearest colour would make every paste
+succeed, but it is the same lossy inference at one remove, and it fails silently
+— nothing on screen says which cells were changed. The invariant worth keeping
+is that **a paste either reproduces the source exactly or does nothing.**
+
+`PALETTE_SIZE` (§ 1) is the cap being tested here, and index 0 is spoken for, so
+a fragment can introduce at most 35 colours into an empty palette.
+
+### Index 0 means "do not paint"
+
+`colors[0]` is `"transparent"` by the same convention the animation format uses.
+A cell of 0 leaves whatever is underneath it alone, which is what makes a
+non-rectangular shape survive the trip: the fragment is always a rectangle, and
+the transparent cells are the mask. There is no separate mask field and there
+should not be one.
+
+### Pasting across grid sizes
+
+Cells are cells. A 6×6 fragment copied from a 60×60 animation lands as 6×6 in a
+20×20 one — physically larger against that canvas, and correctly so. Nothing is
+resampled: `GRID_SIZES` (§ 1) are whole multiples of each other only in one
+direction, and rescaling a fragment on paste would silently redraw it.
+
+The origin travels with the fragment so that pasting into a *different frame of
+the same animation* lands it exactly where it was — one cell off is visible as a
+jitter when the frames play. When the origin puts part of the fragment outside a
+smaller grid, the recommended behaviour is to let it hang over the edge in
+whatever floating/pending state the editor already has for a moved selection,
+rather than clamping (which moves it) or cropping on arrival (which discards
+content without saying so).
+
+### What a reader must do with an unknown `clawdclip`
+
+Treat the text as ordinary text and let it fall through to whatever normally
+handles a paste. A reader should sniff for the `clawdclip` key *before* deciding
+the clipboard belongs to it — the top-level key is deliberately different from
+the whole-animation document's (`name` / `category` / `palette` / `frames`), so
+the two can never be mistaken for each other.
+
+### A payload to test against
+
+`tools/fixtures/clip-fragment-v1.json` is a real capture: the editor was driven
+through the copy gesture and the bytes were read back off the system clipboard.
+It is there for *your* tests, not ours — nothing in this repo reads it.
+
+Use it rather than writing your own sample. A fixture you compose yourself
+proves that you agree with yourself; the useful test is the one where the bytes
+came from the other side of the boundary. The capture deliberately includes
+transparent cells, colours that were at different indices in the source
+document, an origin away from the top-left, and a fragment that straddles two
+separate objects.
 
 ---
 
