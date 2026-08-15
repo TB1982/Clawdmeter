@@ -181,6 +181,11 @@
   textarea { width: 100%; height: 90px; background: #14120f; color: var(--text);
              border: 1px solid var(--line); font: 11px/1.4 ui-monospace, monospace; padding: 6px; }
   .warn { color: #ffb454; font-size: 11px; margin-top: 6px; }
+  #clipmsg { font-size: 11px; margin: 6px 0 0; min-height: 14px; color: var(--dim); }
+  #clipmsg .ok { color: #7ee787; }
+  #clipmsg .warn { font-size: 11px; margin: 0; }
+  /* Off-screen, not hidden: it has to be focusable. */
+  #clipsink { position: fixed; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
   .ok { color: #7ac07a; }
   a { color: var(--accent); }
   .titlebar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
@@ -280,7 +285,18 @@
             <button id="s-done" data-i18n="deselect">取消選取</button>
             <span style="color:var(--dim);font-size:11px" data-i18n="selHint">方向鍵推一格 · Esc 放下 · 複製後可貼到別的影格</span>
           </div>
+          <!-- Clipboard feedback sits here, under the toolbar and above the
+               canvas, because that is where the eyes already are when ⌘V is
+               pressed. The import panel's own #importmsg is off to the side and
+               a refused paste announced over there reads as nothing happening. -->
+          <div id="clipmsg"></div>
         </div>
+    <!-- Focus is handed to this for the duration of one paste and taken straight
+         back; see clipPasteTrigger(). It is off-screen rather than hidden
+         because a display:none element cannot take focus, and it must never hold
+         focus between events — the keydown handler bails on TEXTAREA, so a sink
+         that lingered would silently kill every shortcut on the page. -->
+    <textarea id="clipsink" aria-hidden="true" tabindex="-1"></textarea>
     <canvas id="grid" width="480" height="480"></canvas>
     <!-- Under the canvas on purpose. This block lived under the frame strip
          first, where it pushed the frame buttons below the fold — and stepping
@@ -414,6 +430,13 @@ const KM_URL = REPO + '/docs/animation-craft.md';
 const GRID_SIZES = [20, 40, 60];
 let N = 20;                    // current side; changed only via setGridSize()
 
+// Version of the frame-fragment payload this editor writes to the system
+// clipboard on copy. Keep in step with CLIP_VERSION in tools/lib/format.js;
+// build_editor_samples.js refuses to write if the two disagree. The format
+// itself is docs/animation-contract.md § 7 — that document, not this file, is
+// what other programs read.
+const CLIP_VERSION = 1;
+
 // Packed frame strings (the embedded samples and TEMPLATE) store one character
 // per cell: '.' for empty, otherwise the palette index in base-36. Digits mean
 // the same thing they did when the cap was 10, so older strings still decode.
@@ -487,6 +510,10 @@ const I18N = {
   sampleInfo: '{n} 格 · {c} 色 · 總長 {ms} ms',
   noSamples: '（尚未產生樣本 — 執行 node tools/build_editor_samples.js）',
   badJson: '不是有效的 JSON', canvasSize: '畫布是 {w}×{h}，需要 {n}×{n}',
+  clipCopied: '已複製 {h}×{w} 到系統剪貼簿 · 可貼到別的編輯器',
+  clipPasted: '已貼上 {h}×{w}', clipPastedNew: '已貼上 {h}×{w} · 新增 {n} 色',
+  clipFull: '沒有貼上 · 這塊需要 {n} 個新色，調色盤只剩 {r} 格（上限 {max}）',
+  clipNewer: '沒有貼上 · 這塊來自較新的格式（clawdclip={v}），這個編輯器只認到 {cur}',
   unknownFormat: '認不出這個格式', imported: '已匯入 {n} 格',
   cBody: '身體（品牌赭紅）', cEye: '眼睛（與背景同色，讀起來是洞）',
   cHeart: '亮愛心', cHeartDark: '暗愛心', cPetal: '花瓣', cPistil: '花心',
@@ -550,6 +577,10 @@ const I18N = {
   sampleInfo: '{n} frames · {c} colours · {ms} ms total',
   noSamples: '(no samples built yet — run node tools/build_editor_samples.js)',
   badJson: 'Not valid JSON', canvasSize: 'Canvas is {w}×{h}, needs to be {n}×{n}',
+  clipCopied: 'Copied {h}×{w} to the system clipboard · paste it in another editor',
+  clipPasted: 'Pasted {h}×{w}', clipPastedNew: 'Pasted {h}×{w} · {n} colours added',
+  clipFull: 'Nothing pasted · this needs {n} new colours and only {r} slots are free (cap {max})',
+  clipNewer: 'Nothing pasted · this came from a newer format (clawdclip={v}); this editor reads up to {cur}',
   unknownFormat: 'Unrecognised format', imported: 'Imported {n} frames',
   cBody: 'Body (brand terracotta)', cEye: 'Eye (same as background, reads as a hole)',
   cHeart: 'Heart, light', cHeartDark: 'Heart, dark', cPetal: 'Petal', cPistil: 'Flower centre',
@@ -613,6 +644,10 @@ const I18N = {
   sampleInfo: '{n} コマ · {c} 色 · 合計 {ms} ms',
   noSamples: '（サンプル未生成 — node tools/build_editor_samples.js を実行してください）',
   badJson: '有効な JSON ではありません', canvasSize: 'キャンバスが {w}×{h} です。{n}×{n} である必要があります',
+  clipCopied: '{h}×{w} をシステムのクリップボードにコピーしました · 他のエディタに貼り付けられます',
+  clipPasted: '{h}×{w} を貼り付けました', clipPastedNew: '{h}×{w} を貼り付けました · {n} 色を追加',
+  clipFull: '貼り付けていません · {n} 色の追加が必要ですが、空きは {r} 枠です（上限 {max}）',
+  clipNewer: '貼り付けていません · 新しい形式です（clawdclip={v}）。このエディタは {cur} までです',
   unknownFormat: '形式を判別できません', imported: '{n} コマを読み込みました',
   cBody: '体（ブランドのテラコッタ）', cEye: '目（背景と同色。穴のように見えます）',
   cHeart: 'ハート・明', cHeartDark: 'ハート・暗', cPetal: '花びら', cPistil: '花の中心',
@@ -676,6 +711,10 @@ const I18N = {
   sampleInfo: '{n} 帧 · {c} 色 · 总长 {ms} ms',
   noSamples: '（尚未生成样本 — 运行 node tools/build_editor_samples.js）',
   badJson: '不是有效的 JSON', canvasSize: '画布是 {w}×{h}，需要 {n}×{n}',
+  clipCopied: '已复制 {h}×{w} 到系统剪贴板 · 可粘贴到别的编辑器',
+  clipPasted: '已粘贴 {h}×{w}', clipPastedNew: '已粘贴 {h}×{w} · 新增 {n} 色',
+  clipFull: '没有粘贴 · 这块需要 {n} 个新色，调色板只剩 {r} 格（上限 {max}）',
+  clipNewer: '没有粘贴 · 这块来自较新的格式（clawdclip={v}），这个编辑器只认到 {cur}',
   unknownFormat: '认不出这个格式', imported: '已导入 {n} 帧',
   cBody: '身体（品牌赭红）', cEye: '眼睛（与背景同色，读起来是洞）',
   cHeart: '亮爱心', cHeartDark: '暗爱心', cPetal: '花瓣', cPistil: '花心',
@@ -856,17 +895,157 @@ function selCopy() {
   }
   clip = { r: sel.r, c: sel.c, h: sel.h, w: sel.w, data };
   $('paste').style.display = '';
+  clipWrite(clip);
 }
 
 function selPaste() {
   if (!clip) return;
+  selDrop(clip);
+}
+
+// Put a fragment down as a floating selection. Shared by the internal clipboard
+// and the system one so both land identically — arrows nudge it into place, Esc
+// commits, and anything past the edge stays alive in sel.data until then
+// (selCommit is what clips, and only at that moment).
+function selDrop(frag, afterUndo) {
   selCommit();
   pushUndo();
+  // Anything the caller has to change alongside the drop goes here, after the
+  // snapshot — the undo entry carries the palette as well as the frames, so a
+  // colour appended before this point would survive an undo that removed the
+  // cells using it.
+  if (afterUndo) afterUndo();
   tool = 'select'; setTool();
-  // Floating, not written down: arrows nudge it into place, Esc commits.
-  sel = { r: clip.r, c: clip.c, h: clip.h, w: clip.w,
-          data: clip.data.map(row => [...row]) };
+  sel = { r: frag.r, c: frag.c, h: frag.h, w: frag.w,
+          data: frag.data.map(row => [...row]) };
   renderAll();
+}
+
+// ── the system clipboard ─────────────────────────────────────────────────────
+// A fragment leaves as one line of JSON on text/plain. The format, and the
+// reasoning behind each field, is docs/animation-contract.md § 7 — that document
+// is what other programs read, so it is the thing to change first.
+//
+// Two properties are worth restating here because they constrain this code:
+// the payload carries hex colours rather than palette indices (an index means
+// nothing outside its own document), and index 0 is transparent and means "do
+// not paint", which is how a non-rectangular shape survives inside what is
+// always a rectangle.
+
+const clipMsg = (key, vars, cls) => {
+  const el = $('clipmsg');
+  if (!el) return;
+  el.innerHTML = `<span class="${cls || 'ok'}">${t(key, vars)}</span>`;
+  clearTimeout(clipMsg.timer);
+  clipMsg.timer = setTimeout(() => { el.textContent = ''; }, 6000);
+};
+
+function clipEncode(frag) {
+  // Re-index to just the colours this fragment uses. Sending the whole palette
+  // would make most of the payload dead weight, and would also hand the receiver
+  // colours it has no cells for — which it would then have to decide about.
+  const used = new Map([['transparent', 0]]);
+  const colors = ['transparent'];
+  const cells = frag.data.map(row => row.map(v => {
+    if (!v) return 0;
+    const hex = (palette[v] || 'transparent').toUpperCase();
+    if (hex === 'TRANSPARENT') return 0;
+    if (!used.has(hex)) { used.set(hex, colors.length); colors.push(hex); }
+    return used.get(hex);
+  }));
+  return {clawdclip: CLIP_VERSION, r: frag.r, c: frag.c, h: frag.h, w: frag.w, colors, cells};
+}
+
+function clipWrite(frag) {
+  const payload = JSON.stringify(clipEncode(frag));
+  // Best effort by design: the internal clipboard has already been set by the
+  // caller, so a browser that refuses the write leaves copy-within-this-page
+  // working rather than failing the whole gesture.
+  const done = () => clipMsg('clipCopied', {h: frag.h, w: frag.w});
+  try {
+    navigator.clipboard.writeText(payload).then(done, () => {});
+  } catch { /* no clipboard access — internal copy still happened */ }
+}
+
+// Returns a fragment, or a {error, vars} to show. Never throws: this runs on
+// every paste, including the ones that are somebody else's text.
+function clipDecode(txt) {
+  let d;
+  try { d = JSON.parse(txt); } catch { return null; }
+  if (!d || typeof d !== 'object' || d.clawdclip === undefined) return null;
+  // Sniffing the key before claiming the paste is what lets a document-level
+  // handler coexist with everything else on the page. An unknown version is a
+  // different case: it IS ours, we just can't read it, and saying so beats
+  // guessing at cells whose meaning may have changed.
+  if (d.clawdclip > CLIP_VERSION)
+    return {error: 'clipNewer', vars: {v: d.clawdclip, cur: CLIP_VERSION}};
+  if (!Array.isArray(d.cells) || !Array.isArray(d.colors)) return null;
+
+  const h = d.cells.length, w = h ? d.cells[0].length : 0;
+  if (!h || !w || d.cells.some(row => !Array.isArray(row) || row.length !== w)) return null;
+
+  // Which of the incoming colours this document does not already have. Exact
+  // string match, never nearest — see the contract: substituting a close colour
+  // is the same lossy inference one layer up, and it fails without a mark.
+  const have = new Map(palette.map((hex, i) => [String(hex).toUpperCase(), i]));
+  const remap = [0];
+  const fresh = [];
+  for (let i = 1; i < d.colors.length; i++) {
+    const hex = String(d.colors[i]).toUpperCase();
+    if (have.has(hex)) { remap[i] = have.get(hex); continue; }
+    const at = palette.length + fresh.length;
+    fresh.push(hex); remap[i] = at; have.set(hex, at);
+  }
+  const room = PALETTE_MAX - palette.length;
+  if (fresh.length > room)
+    return {error: 'clipFull', vars: {n: fresh.length, r: room}};
+
+  return {
+    fresh,
+    frag: {
+      r: Number.isInteger(d.r) ? d.r : 0,
+      c: Number.isInteger(d.c) ? d.c : 0,
+      h, w,
+      data: d.cells.map(row => row.map(v => remap[v] || 0)),
+    },
+  };
+}
+
+function clipRead(txt) {
+  const res = clipDecode(txt);
+  if (!res) return false;                       // not ours; let it fall through
+  if (res.error) { clipMsg(res.error, res.vars, 'warn'); return true; }
+  // Nothing has been mutated until here — a refused paste above leaves the
+  // palette and the grid exactly as they were, which is the whole invariant.
+  selDrop(res.frag, () => res.fresh.forEach(hex => palette.push(hex)));
+  clip = res.frag;                              // ⌘V again repeats it locally
+  $('paste').style.display = '';
+  if (res.fresh.length) renderPalette();
+  clipMsg(res.fresh.length ? 'clipPastedNew' : 'clipPasted',
+          {h: res.frag.h, w: res.frag.w, n: res.fresh.length});
+  return true;
+}
+
+// Chromium does not fire a paste event when focus is on the body, and a canvas
+// is not focusable — so a document-level listener never runs in the state this
+// editor is actually in. (Measured both here and by the VAS side, each with a
+// textarea control group that did fire.)
+//
+// So focus is *lent* to a sink for exactly one paste and taken straight back.
+// The important word is lent: a sink that keeps focus would be caught by this
+// handler's own INPUT|TEXTAREA guard on the next keypress and would silently
+// disable every shortcut on the page.
+function clipPasteTrigger() {
+  const sink = $('clipsink');
+  if (!sink) return;
+  sink.value = '';
+  sink.focus();
+  // If no paste arrives (empty clipboard, denied read), hand focus back anyway
+  // rather than leaving the page mute.
+  clearTimeout(clipPasteTrigger.timer);
+  clipPasteTrigger.timer = setTimeout(() => {
+    if (document.activeElement === sink) sink.blur();
+  }, 120);
 }
 
 const $ = id => document.getElementById(id);
@@ -1446,6 +1625,22 @@ $('undo').onclick = () => {
   frames = s.frames; palette = s.palette;
   cur = Math.min(cur, frames.length-1); renderAll();
 };
+// The other half of clipPasteTrigger(). Focus is given back here, before any of
+// the work, so that an exception in decoding cannot strand it on the sink.
+//
+// When the system clipboard holds something that is not one of ours, the
+// internal clipboard is used instead. That reads as a violation of "the last
+// copy wins" — you copied text in another program more recently — but text from
+// another program means nothing to a pixel grid, and the thing you copied HERE
+// is the only candidate that does. This is a decision, not an oversight; the
+// VAS side made the same one on purpose so the two behave alike.
+$('clipsink').addEventListener('paste', e => {
+  const txt = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+  e.preventDefault();
+  $('clipsink').blur();
+  if (!clipRead(txt)) selPaste();
+});
+
 addEventListener('keydown', e => {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
 
@@ -1454,7 +1649,10 @@ addEventListener('keydown', e => {
     e.preventDefault(); tool = 'select'; setTool(); $('s-all').click(); return;
   }
   if ((e.metaKey || e.ctrlKey) && e.key === 'c') { e.preventDefault(); selCopy(); return; }
-  if ((e.metaKey || e.ctrlKey) && e.key === 'v') { e.preventDefault(); selPaste(); return; }
+  // Deliberately NOT preventDefault: the native paste has to happen, so that it
+  // lands in the sink this focuses. The handling is in the sink's paste listener
+  // below; falling back to the internal clipboard is part of it.
+  if ((e.metaKey || e.ctrlKey) && e.key === 'v') { clipPasteTrigger(); return; }
 
   // Arrows mean two things depending on what's in hand. With a selection they
   // nudge it a cell; with nothing selected, left/right step through frames —

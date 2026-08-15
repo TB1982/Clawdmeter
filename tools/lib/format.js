@@ -49,4 +49,19 @@ const PALETTE_SIZE = 36;
 // animation goes from 10 KB to 90 KB of flash. Fine for a few, not for all.
 const GRID_SIZES = [20, 40, 60];
 
-module.exports = {PALETTE_SIZE, GRID_SIZES};
+// Version of the frame-fragment clipboard payload — the `clawdclip` field of the
+// single-line JSON that ⌘C puts on the system clipboard. See
+// docs/animation-contract.md § 7 for the payload itself.
+//
+// It is a version and not just a magic string because the receiver is a separate
+// program on a separate release cycle (VAS, which mirrors this file's constants
+// and checks them against the contract document in its own test suite). Two
+// editors that ship independently will at some point disagree about the format;
+// the number is what lets the older one say so instead of misreading the newer
+// one's cells.
+//
+// Bump it only for a change that an older reader would get *wrong*. Adding a
+// field an older reader ignores is not that — it stays 1.
+const CLIP_VERSION = 1;
+
+module.exports = {PALETTE_SIZE, GRID_SIZES, CLIP_VERSION};
