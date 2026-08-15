@@ -113,6 +113,19 @@ check('badResize exists in all four locales',
 check('the clipboard strings exist in all four locales',
       ['clipCopied', 'clipPasted', 'clipPastedNew', 'clipFull', 'clipNewer']
         .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
+check('the origin strings exist in all four locales',
+      ['srcClaudepix', 'srcClaudepixProps', 'srcOfficial', 'srcDrawn', 'srcUnknown']
+        .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
+// Every sample says where it came from. Most of this library is somebody
+// else's work; a sample that arrives unlabelled reads as ours by default, and
+// that default is the one worth making impossible.
+{
+  const block = html.slice(html.indexOf('/*BEGIN-SAMPLES*/'), html.indexOf('/*END-SAMPLES*/'));
+  const total = (block.match(/^\{n:"/gm) || []).length;
+  const labelled = (block.match(/^\{n:"[^"]*",c:"[^"]*",s:"[^"]*"/gm) || []).length;
+  check(`all ${total} samples carry an origin (${labelled} labelled)`,
+        total > 0 && labelled === total);
+}
 
 console.log(fail ? `\n${fail} FAILED` : '\nall checks passed');
 process.exit(fail ? 1 : 0);
