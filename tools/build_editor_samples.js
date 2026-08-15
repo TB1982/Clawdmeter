@@ -32,6 +32,42 @@ const TINT = { '#CD7F6A': '#D97757' };
 // the same name and no way to tell which one is the one actually on the device.
 const byName = new Map();
 
+// Where each animation came from, which is NOT the same question as which
+// directory won.
+//
+// A claudepix animation that was edited here has a copy in drawn_anims/, and
+// drawn_anims/ wins — so labelling by winning directory would file it under
+// "drawn for this project". For `idle look around` that copy is byte-identical
+// to the scrape. Calling it ours because of where the file sits is exactly the
+// laundering this label exists to prevent, so origin is decided by whether the
+// NAME appears in a third-party source dir, wherever the winning file lives.
+//
+// custom_anims/ counts as claudepix too: make_custom_anims.js does not draw
+// characters, it poses an existing claudepix animation and lays props over it.
+// The props are ours; what they are riding is not.
+//
+// See tools/README.md § License note. The point of putting this in the editor
+// is that the editor is one file that gets downloaded and carried away from the
+// repo, and the README does not travel with it.
+const namesIn = dir => {
+  const d = path.join(__dirname, dir);
+  if (!fs.existsSync(d)) return new Set();
+  return new Set(fs.readdirSync(d)
+    .filter(f => f.endsWith('.json') && !f.startsWith('_'))
+    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')).name; }
+                catch { return null; } })
+    .filter(Boolean));
+};
+const fromClaudepix = namesIn('claudepix_data');
+const fromCustom    = namesIn('custom_anims');
+const fromOfficial  = namesIn('official_anims');
+
+const originOf = name =>
+  fromCustom.has(name)    ? 'claudepix+' :   // claudepix animation, props added here
+  fromClaudepix.has(name) ? 'claudepix'  :
+  fromOfficial.has(name)  ? 'official'   :
+                            'drawn';
+
 for (const dir of SRC_DIRS) {
   if (!fs.existsSync(dir)) continue;
   for (const file of fs.readdirSync(dir).sort()) {
@@ -42,6 +78,7 @@ for (const dir of SRC_DIRS) {
     byName.set(a.name, {
       n: a.name,
       c: a.category || 'Idle',
+      s: originOf(a.name),
       p: a.palette.map(h => h === 'transparent' ? 'transparent'
                                                 : (TINT[h.toUpperCase()] || h.toUpperCase())),
       // One string per frame: 400 chars, '.' for empty. Indices are base-36
@@ -57,7 +94,25 @@ for (const dir of SRC_DIRS) {
   }
 }
 
-const anims = [...byName.values()];
+// --public builds the copy that goes on the web, and it leaves out every
+// animation whose origin is claudepix — including the three where the props are
+// ours and only the creature underneath is theirs.
+//
+// Not because the repo hides them: the source files stay where tools/README.md
+// § License note says they stay, and this script still embeds all of them into
+// tools/anim_editor.html for local use. The difference is what gets *served*.
+// Publishing a page is a distribution in a way that a file in a repo someone
+// chooses to clone is not, and the thing we point strangers at should carry only
+// what we mean to hand them.
+//
+// claudepix states no license and its author's account is unreachable as of
+// 2026-08-15, so there is nobody to ask. Unreachable is not permission — the
+// exclusion is what you do when you cannot ask, and it is reversible the day
+// that changes.
+const PUBLIC = process.argv.includes('--public');
+const THIRD_PARTY = new Set(['claudepix', 'claudepix+']);
+
+const anims = [...byName.values()].filter(a => !(PUBLIC && THIRD_PARTY.has(a.s)));
 anims.sort((x, y) => x.c.localeCompare(y.c) || x.n.localeCompare(y.n));
 
 const html = fs.readFileSync(EDITOR, 'utf8');
@@ -104,13 +159,25 @@ if (PALETTE_SIZE > 36) {
 }
 
 const payload = '[\n' + anims.map(a =>
-  `{n:${JSON.stringify(a.n)},c:${JSON.stringify(a.c)},p:${JSON.stringify(a.p)},f:[` +
+  `{n:${JSON.stringify(a.n)},c:${JSON.stringify(a.c)},s:${JSON.stringify(a.s)},p:${JSON.stringify(a.p)},f:[` +
   a.f.map(f => `{h:${f.h},g:${JSON.stringify(f.g)}}`).join(',') + ']}'
 ).join(',\n') + '\n]';
 
 const out = html.slice(0, i + BEGIN.length) + payload + html.slice(j);
-fs.writeFileSync(EDITOR, out);
+
+// The public copy is written beside the docs rather than over the working one:
+// GitHub Pages serves a folder, so publishing from docs/ is also what stops the
+// rest of the repo — tools/claudepix_data/ included — from being served off the
+// project's own domain as a side effect of Pages being on at all.
+const DEST = PUBLIC ? path.join(__dirname, '..', 'docs', 'anim_editor.html') : EDITOR;
+fs.mkdirSync(path.dirname(DEST), {recursive: true});
+fs.writeFileSync(DEST, out);
 
 const frames = anims.reduce((s, a) => s + a.f.length, 0);
-console.log(`Embedded ${anims.length} animations (${frames} frames) into ${path.basename(EDITOR)}`);
+const where = path.relative(path.join(__dirname, '..'), DEST);
+console.log(`Embedded ${anims.length} animations (${frames} frames) into ${where}`);
 console.log(`  ${(out.length / 1024).toFixed(0)} KB total`);
+if (PUBLIC) {
+  const held = [...byName.values()].filter(a => THIRD_PARTY.has(a.s)).length;
+  console.log(`  public build — ${held} claudepix-origin animations left out`);
+}
