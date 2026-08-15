@@ -18,17 +18,21 @@ const path = require('path');
 const STEPS = [
   ['convert_to_c.js',         'animations  -> firmware/src/splash_animations.h'],
   ['build_editor_samples.js', 'animations  -> tools/anim_editor.html samples'],
+  // The published copy is rebuilt here rather than by hand, because the failure
+  // it prevents is silent: a new animation lands, the local editor gets it, and
+  // the one strangers actually open is a version behind with nothing to say so.
+  ['build_editor_samples.js', 'own + official only -> docs/anim_editor.html', ['--public']],
   ['gen_catalogue.js',        'firmware    -> docs/animation-catalogue.md'],
   ['check_groups.js',         'every name the firmware asks for resolves'],
   ['check_editor.js',         'the editor parses and its grid maths hold'],
 ];
 
 let n = 0;
-for (const [script, what] of STEPS) {
+for (const [script, what, args = []] of STEPS) {
   n++;
   console.log(`\n\x1b[1m[${n}/${STEPS.length}] ${script}\x1b[0m  ${what}`);
   try {
-    execFileSync(process.execPath, [path.join(__dirname, script)], {stdio: 'inherit'});
+    execFileSync(process.execPath, [path.join(__dirname, script), ...args], {stdio: 'inherit'});
   } catch (e) {
     console.error(`\n\x1b[31mstopped at ${script}\x1b[0m — nothing after it ran.`);
     process.exit(e.status || 1);

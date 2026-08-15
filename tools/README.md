@@ -342,6 +342,24 @@ They are still loadable in the editor, `make_custom_anims.js` still needs them
 as bases, and any of them can be put back by deleting a line from `EXCLUDE`. So
 this section still applies to the repository, just not to the device:
 
+**As of 2026-08-15 the published editor carries none of it either.**
+`build_editor_samples.js --public` writes `docs/anim_editor.html` with only the
+animations drawn here and Anthropic's imports — 27 of the 45 — and that is the
+copy GitHub Pages serves. `tools/anim_editor.html` keeps all 45 for local use.
+
+The distinction being drawn is between a file in a repository someone chooses to
+clone and a page served to whoever opens a link: the second is a distribution in
+a way the first is not, and it is the one that gets pointed at from elsewhere.
+Serving Pages from `docs/` rather than the repository root is the other half of
+that — with Pages on at the root, `tools/claudepix_data/*.json` was being served
+from the project's own domain as a side effect nobody chose.
+
+@amaanbuilds' account is unreachable as of 2026-08-15, so there is nobody to ask
+for permission. **Unreachable is not permission.** Leaving the material out is
+what you do when you cannot ask; it is reversible the day that changes, and the
+per-animation origin labels in the editor are there so the question stays
+answerable rather than becoming folklore.
+
 Two parties hold rights in that material and this project holds neither. The
 character Clawd belongs to Anthropic, the pixel animations are claudepix's, and
 the hand-edited versions in `drawn_anims/` are derivative of both. The official

@@ -116,6 +116,13 @@ check('the clipboard strings exist in all four locales',
 check('the origin strings exist in all four locales',
       ['srcClaudepix', 'srcClaudepixProps', 'srcOfficial', 'srcDrawn', 'srcUnknown']
         .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
+check('the credit is split into per-origin parts in all four locales',
+      ['creditClaudepix', 'creditOfficial']
+        .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
+// A footer wired straight to one key would credit claudepix on a build that
+// carries none of their work.
+check('the footer is composed, not bound to a single key',
+      /<footer><\/footer>/.test(html) && !/<footer data-i18n/.test(html));
 // Every sample says where it came from. Most of this library is somebody
 // else's work; a sample that arrives unlabelled reads as ours by default, and
 // that default is the one worth making impossible.
@@ -125,6 +132,32 @@ check('the origin strings exist in all four locales',
   const labelled = (block.match(/^\{n:"[^"]*",c:"[^"]*",s:"[^"]*"/gm) || []).length;
   check(`all ${total} samples carry an origin (${labelled} labelled)`,
         total > 0 && labelled === total);
+}
+
+// The published copy, which is the one strangers open. This check is the point
+// of the whole exercise: everything else here fails loudly in a terminal, but a
+// third-party animation leaking into docs/ fails by being on the internet.
+console.log('\npublished copy:');
+{
+  const pub = path.join(__dirname, '..', 'docs', 'anim_editor.html');
+  if (!fs.existsSync(pub)) {
+    check('docs/anim_editor.html exists (node tools/build_editor_samples.js --public)', false);
+  } else {
+    const p = fs.readFileSync(pub, 'utf8');
+    const block = p.slice(p.indexOf('/*BEGIN-SAMPLES*/'), p.indexOf('/*END-SAMPLES*/'));
+    const origins = [...block.matchAll(/^\{n:"([^"]*)",c:"[^"]*",s:"([^"]*)"/gm)]
+      .map(m => ({n: m[1], s: m[2]}));
+    const leaked = origins.filter(o => o.s === 'claudepix' || o.s === 'claudepix+');
+    check(`no claudepix-origin animation is published${leaked.length ? ' — found ' + leaked.map(o => o.n).join(', ') : ''}`,
+          leaked.length === 0);
+    check(`published copy carries ${origins.length} animations (own + official)`,
+          origins.length > 0);
+    // Same file otherwise: the public build must not become a stale fork of the
+    // editor, only a different sample set.
+    const strip = s => s.slice(0, s.indexOf('/*BEGIN-SAMPLES*/')) + s.slice(s.indexOf('/*END-SAMPLES*/'));
+    check('published copy is the same editor, only the samples differ',
+          strip(p) === strip(html));
+  }
 }
 
 console.log(fail ? `\n${fail} FAILED` : '\nall checks passed');
