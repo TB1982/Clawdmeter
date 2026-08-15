@@ -32,6 +32,42 @@ const TINT = { '#CD7F6A': '#D97757' };
 // the same name and no way to tell which one is the one actually on the device.
 const byName = new Map();
 
+// Where each animation came from, which is NOT the same question as which
+// directory won.
+//
+// A claudepix animation that was edited here has a copy in drawn_anims/, and
+// drawn_anims/ wins — so labelling by winning directory would file it under
+// "drawn for this project". For `idle look around` that copy is byte-identical
+// to the scrape. Calling it ours because of where the file sits is exactly the
+// laundering this label exists to prevent, so origin is decided by whether the
+// NAME appears in a third-party source dir, wherever the winning file lives.
+//
+// custom_anims/ counts as claudepix too: make_custom_anims.js does not draw
+// characters, it poses an existing claudepix animation and lays props over it.
+// The props are ours; what they are riding is not.
+//
+// See tools/README.md § License note. The point of putting this in the editor
+// is that the editor is one file that gets downloaded and carried away from the
+// repo, and the README does not travel with it.
+const namesIn = dir => {
+  const d = path.join(__dirname, dir);
+  if (!fs.existsSync(d)) return new Set();
+  return new Set(fs.readdirSync(d)
+    .filter(f => f.endsWith('.json') && !f.startsWith('_'))
+    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')).name; }
+                catch { return null; } })
+    .filter(Boolean));
+};
+const fromClaudepix = namesIn('claudepix_data');
+const fromCustom    = namesIn('custom_anims');
+const fromOfficial  = namesIn('official_anims');
+
+const originOf = name =>
+  fromCustom.has(name)    ? 'claudepix+' :   // claudepix animation, props added here
+  fromClaudepix.has(name) ? 'claudepix'  :
+  fromOfficial.has(name)  ? 'official'   :
+                            'drawn';
+
 for (const dir of SRC_DIRS) {
   if (!fs.existsSync(dir)) continue;
   for (const file of fs.readdirSync(dir).sort()) {
@@ -42,6 +78,7 @@ for (const dir of SRC_DIRS) {
     byName.set(a.name, {
       n: a.name,
       c: a.category || 'Idle',
+      s: originOf(a.name),
       p: a.palette.map(h => h === 'transparent' ? 'transparent'
                                                 : (TINT[h.toUpperCase()] || h.toUpperCase())),
       // One string per frame: 400 chars, '.' for empty. Indices are base-36
@@ -104,7 +141,7 @@ if (PALETTE_SIZE > 36) {
 }
 
 const payload = '[\n' + anims.map(a =>
-  `{n:${JSON.stringify(a.n)},c:${JSON.stringify(a.c)},p:${JSON.stringify(a.p)},f:[` +
+  `{n:${JSON.stringify(a.n)},c:${JSON.stringify(a.c)},s:${JSON.stringify(a.s)},p:${JSON.stringify(a.p)},f:[` +
   a.f.map(f => `{h:${f.h},g:${JSON.stringify(f.g)}}`).join(',') + ']}'
 ).join(',\n') + '\n]';
 
