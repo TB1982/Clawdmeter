@@ -94,7 +94,25 @@ for (const dir of SRC_DIRS) {
   }
 }
 
-const anims = [...byName.values()];
+// --public builds the copy that goes on the web, and it leaves out every
+// animation whose origin is claudepix — including the three where the props are
+// ours and only the creature underneath is theirs.
+//
+// Not because the repo hides them: the source files stay where tools/README.md
+// § License note says they stay, and this script still embeds all of them into
+// tools/anim_editor.html for local use. The difference is what gets *served*.
+// Publishing a page is a distribution in a way that a file in a repo someone
+// chooses to clone is not, and the thing we point strangers at should carry only
+// what we mean to hand them.
+//
+// claudepix states no license and its author's account is unreachable as of
+// 2026-08-15, so there is nobody to ask. Unreachable is not permission — the
+// exclusion is what you do when you cannot ask, and it is reversible the day
+// that changes.
+const PUBLIC = process.argv.includes('--public');
+const THIRD_PARTY = new Set(['claudepix', 'claudepix+']);
+
+const anims = [...byName.values()].filter(a => !(PUBLIC && THIRD_PARTY.has(a.s)));
 anims.sort((x, y) => x.c.localeCompare(y.c) || x.n.localeCompare(y.n));
 
 const html = fs.readFileSync(EDITOR, 'utf8');
@@ -146,8 +164,20 @@ const payload = '[\n' + anims.map(a =>
 ).join(',\n') + '\n]';
 
 const out = html.slice(0, i + BEGIN.length) + payload + html.slice(j);
-fs.writeFileSync(EDITOR, out);
+
+// The public copy is written beside the docs rather than over the working one:
+// GitHub Pages serves a folder, so publishing from docs/ is also what stops the
+// rest of the repo — tools/claudepix_data/ included — from being served off the
+// project's own domain as a side effect of Pages being on at all.
+const DEST = PUBLIC ? path.join(__dirname, '..', 'docs', 'anim_editor.html') : EDITOR;
+fs.mkdirSync(path.dirname(DEST), {recursive: true});
+fs.writeFileSync(DEST, out);
 
 const frames = anims.reduce((s, a) => s + a.f.length, 0);
-console.log(`Embedded ${anims.length} animations (${frames} frames) into ${path.basename(EDITOR)}`);
+const where = path.relative(path.join(__dirname, '..'), DEST);
+console.log(`Embedded ${anims.length} animations (${frames} frames) into ${where}`);
 console.log(`  ${(out.length / 1024).toFixed(0)} KB total`);
+if (PUBLIC) {
+  const held = [...byName.values()].filter(a => THIRD_PARTY.has(a.s)).length;
+  console.log(`  public build — ${held} claudepix-origin animations left out`);
+}
