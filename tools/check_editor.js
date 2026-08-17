@@ -91,7 +91,7 @@ for (const [a, b] of pairs) {
 }
 
 // 4. Constants agree with the shared format module.
-const {PALETTE_SIZE, GRID_SIZES, CLIP_VERSION} = require('./lib/format.js');
+const {PALETTE_SIZE, GRID_SIZES, CLIP_VERSION, HOLD_MIN_MS} = require('./lib/format.js');
 console.log('\nconstants:');
 check(`GRID_SIZES matches format.js (${GRID_SIZES.join(', ')})`,
       (html.match(/const GRID_SIZES = \[([^\]]*)\];/) || [])[1].replace(/\s+/g,' ').trim()
@@ -106,6 +106,19 @@ check(`CLIP_VERSION matches format.js (${CLIP_VERSION})`,
 check(`docs/animation-contract.md § 6 states CLIP_VERSION ${CLIP_VERSION}`,
       new RegExp(`\\|\\s*\`CLIP_VERSION\`\\s*\\|\\s*${CLIP_VERSION}\\s*\\|`)
         .test(fs.readFileSync(path.join(__dirname, '..', 'docs', 'animation-contract.md'), 'utf8')));
+check(`docs/animation-contract.md § 6 states HOLD_MIN_MS ${HOLD_MIN_MS}`,
+      new RegExp(`\\|\\s*\`HOLD_MIN_MS\`\\s*\\|\\s*${HOLD_MIN_MS}\\s*\\|`)
+        .test(fs.readFileSync(path.join(__dirname, '..', 'docs', 'animation-contract.md'), 'utf8')));
+check(`HOLD_MIN matches format.js (${HOLD_MIN_MS})`,
+      (html.match(/const HOLD_MIN = (\d+);/) || [])[1] === String(HOLD_MIN_MS));
+// A floor, not a grid. step=20 drives the arrow buttons; several scraped
+// animations run on 1/12-second beats (83, 166, 332, 498 ms) that no rounding
+// preserves, so the day min and step are conflated those rhythms are lost.
+check('the hold field keeps step and min separate',
+      /inp\.min = HOLD_MIN; inp\.step = 20;/.test(html));
+check('the hold strings exist in all four locales',
+      ['holdWhole', 'holdFloor']
+        .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
 check('the 60 option exists in the size select',
       /<option value="60">/.test(html));
 check('badResize exists in all four locales',

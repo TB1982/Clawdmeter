@@ -41,7 +41,7 @@ const OUT_FILE = path.resolve(opt('--out',
 // place by being exactly 2x: a 20x20 animation upscales into it with each cell
 // becoming a 2x2 block, so it looks identical on screen and can then be
 // refined.
-const {PALETTE_SIZE, GRID_SIZES} = require('./lib/format.js');
+const {PALETTE_SIZE, GRID_SIZES, HOLD_MIN_MS} = require('./lib/format.js');
 
 // Animations that stay in the source directories — so they keep working as
 // editor samples and as bases for make_custom_anims.js — but are not emitted
@@ -178,7 +178,22 @@ function validate(data, where) {
     die(`grid is ${side}x${side}; supported sides are ${GRID_SIZES.join(', ')}`);
 
   data.frames.forEach((f, i) => {
-    if (typeof f.hold !== 'number' || f.hold <= 0) die(`frame ${i}: "hold" must be a positive number of ms`);
+    // The gate for JSON that never went through the editor — hand-written, or
+    // produced by grid_image_to_anim.js / an external tool. Both branches say
+    // why, because both failures are otherwise diagnosed a long way from here:
+    // a fractional hold as a C++ narrowing error during the firmware build, a
+    // sub-20ms hold as an animation that simply does not run at the speed it
+    // says it does. See HOLD_MIN_MS in lib/format.js.
+    if (typeof f.hold !== 'number' || !Number.isFinite(f.hold))
+      die(`frame ${i}: "hold" must be a number of ms, got ${JSON.stringify(f.hold)}`);
+    if (!Number.isInteger(f.hold))
+      die(`frame ${i}: "hold" is ${f.hold} — holds must be whole ms. ` +
+          `They compile into a uint16_t[], where a fraction is a narrowing conversion ` +
+          `and the firmware build fails without naming this animation.`);
+    if (f.hold < HOLD_MIN_MS)
+      die(`frame ${i}: "hold" is ${f.hold}ms, below the ${HOLD_MIN_MS}ms floor. ` +
+          `The firmware polls frames once per main-loop pass, so a shorter hold ` +
+          `is not honoured — the frame would last as long as the pass, not ${f.hold}ms.`);
     if (!Array.isArray(f.grid) || f.grid.length !== side)
       die(`frame ${i}: grid must have ${side} rows to match frame 0, has ${f.grid?.length}`);
     f.grid.forEach((row, r) => {

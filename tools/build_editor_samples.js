@@ -127,16 +127,18 @@ if (i < 0 || j < 0) {
 // built around. So it keeps its own copies and this is where they are checked.
 // The last time a copy drifted, two importers spent three days rejecting valid
 // drawings with a message that read like a rule.
-const {PALETTE_SIZE, GRID_SIZES, CLIP_VERSION} = require('./lib/format.js');
+const {PALETTE_SIZE, GRID_SIZES, CLIP_VERSION, HOLD_MIN_MS} = require('./lib/format.js');
 const declared = {
   PALETTE_MAX:  (html.match(/const PALETTE_MAX = (\d+);/) || [])[1],
   GRID_SIZES:   (html.match(/const GRID_SIZES = \[([^\]]*)\];/) || [])[1],
   CLIP_VERSION: (html.match(/const CLIP_VERSION = (\d+);/) || [])[1],
+  HOLD_MIN:     (html.match(/const HOLD_MIN = (\d+);/) || [])[1],
 };
 const want = {
   PALETTE_MAX:  String(PALETTE_SIZE),
   GRID_SIZES:   GRID_SIZES.join(', '),
   CLIP_VERSION: String(CLIP_VERSION),
+  HOLD_MIN:     String(HOLD_MIN_MS),
 };
 for (const k of Object.keys(want)) {
   if (declared[k] === undefined) {
