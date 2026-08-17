@@ -621,11 +621,20 @@ static void update_stocks(const UsageData* d) {
         lv_label_set_text(lbl_stock_sym[row], sym);
         lv_label_set_text(lbl_stock_px[row], px);
         lv_label_set_text(lbl_stock_chg[row], chg);
-        // Green up, red down, plain when flat. Flat is common outside trading,
-        // and colouring a zero would read as a move that did not happen.
+        // RED for up and GREEN for down — the Taiwan convention, and the
+        // opposite of the Anglo-American one. Nova had to point this out; the
+        // first cut used red-for-down and would have read as a loss on every
+        // good day. These quotes are Taiwan-only by choice, so the local
+        // convention is simply the correct one here. If this screen ever shows
+        // a US listing, the colour has to follow that market rather than this
+        // one, which means the convention belongs with the quote and not with
+        // the widget.
+        //
+        // Flat stays plain: outside trading hours every line is +0.0, and
+        // colouring a zero would show a move that did not happen.
         lv_color_t c = COL_TEXT;
-        if      (chg[0] == '+' && !(chg[1] == '0' && chg[3] == '0')) c = COL_GREEN;
-        else if (chg[0] == '-' && !(chg[1] == '0' && chg[3] == '0')) c = COL_RED;
+        if      (chg[0] == '+' && !(chg[1] == '0' && chg[3] == '0')) c = COL_RED;
+        else if (chg[0] == '-' && !(chg[1] == '0' && chg[3] == '0')) c = COL_GREEN;
         lv_obj_set_style_text_color(lbl_stock_px[row], COL_TEXT, 0);
         lv_obj_set_style_text_color(lbl_stock_chg[row], c, 0);
         row++;
@@ -633,7 +642,7 @@ static void update_stocks(const UsageData* d) {
 
     lv_label_set_text(lbl_stock_state, d->stocks_open ? "market open" : "at last close");
     lv_obj_set_style_text_color(lbl_stock_state,
-                                d->stocks_open ? COL_GREEN : COL_DIM, 0);
+                                d->stocks_open ? COL_TEXT : COL_DIM, 0);
 }
 
 // ======== Weather screen ========
