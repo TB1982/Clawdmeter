@@ -439,6 +439,15 @@ let N = 20;                    // current side; changed only via setGridSize()
 // what other programs read.
 const CLIP_VERSION = 1;
 
+// Shortest hold a frame may declare, whole ms. Mirrors HOLD_MIN_MS in
+// tools/lib/format.js (which carries the reasoning); build_editor_samples.js
+// refuses to write if the two disagree.
+//
+// A floor, not a grid. The hold field's step=20 drives its arrow buttons only —
+// typing 310 keeps 310, and it has to, because several scraped animations run
+// on 1/12-second beats (83, 166, 332, 498 ms) that no rounding preserves.
+const HOLD_MIN = 20;
+
 // Packed frame strings (the embedded samples and TEMPLATE) store one character
 // per cell: '.' for empty, otherwise the palette index in base-36. Digits mean
 // the same thing they did when the cap was 10, so older strings still decode.
@@ -516,6 +525,8 @@ const I18N = {
   sampleInfo: '{n} 格 · {c} 色 · 總長 {ms} ms',
   noSamples: '（尚未產生樣本 — 執行 node tools/build_editor_samples.js）',
   badJson: '不是有效的 JSON', canvasSize: '畫布是 {w}×{h}，需要 {n}×{n}',
+  holdWhole: '第 {i} 格的 hold 是 {v}，必須是整數毫秒（韌體以 uint16_t 儲存，小數會在編譯時失敗）',
+  holdFloor: '第 {i} 格的 hold 是 {v} ms，低於 {min} ms 下限。韌體每輪主迴圈才檢查一次影格，更短的值不會被兌現',
   clipCopied: '已複製 {h}×{w} 到系統剪貼簿 · 可貼到別的編輯器',
   clipPasted: '已貼上 {h}×{w}', clipPastedNew: '已貼上 {h}×{w} · 新增 {n} 色',
   clipFull: '沒有貼上 · 這塊需要 {n} 個新色，調色盤只剩 {r} 格（上限 {max}）',
@@ -587,6 +598,8 @@ const I18N = {
   sampleInfo: '{n} frames · {c} colours · {ms} ms total',
   noSamples: '(no samples built yet — run node tools/build_editor_samples.js)',
   badJson: 'Not valid JSON', canvasSize: 'Canvas is {w}×{h}, needs to be {n}×{n}',
+  holdWhole: 'Frame {i} has hold {v} — holds must be whole ms (the firmware stores them as uint16_t, and a fraction fails at build time)',
+  holdFloor: 'Frame {i} has hold {v}ms, below the {min}ms floor. The firmware checks frames once per main-loop pass, so a shorter hold is not honoured',
   clipCopied: 'Copied {h}×{w} to the system clipboard · paste it in another editor',
   clipPasted: 'Pasted {h}×{w}', clipPastedNew: 'Pasted {h}×{w} · {n} colours added',
   clipFull: 'Nothing pasted · this needs {n} new colours and only {r} slots are free (cap {max})',
@@ -658,6 +671,8 @@ const I18N = {
   sampleInfo: '{n} コマ · {c} 色 · 合計 {ms} ms',
   noSamples: '（サンプル未生成 — node tools/build_editor_samples.js を実行してください）',
   badJson: '有効な JSON ではありません', canvasSize: 'キャンバスが {w}×{h} です。{n}×{n} である必要があります',
+  holdWhole: '{i} コマ目の hold が {v} です。hold は整数のミリ秒である必要があります（ファームウェアは uint16_t で保持するため、小数はビルド時に失敗します）',
+  holdFloor: '{i} コマ目の hold が {v}ms で、下限 {min}ms を下回っています。ファームウェアはメインループ 1 周につき 1 回しかコマを確認しないため、これより短い値は反映されません',
   clipCopied: '{h}×{w} をシステムのクリップボードにコピーしました · 他のエディタに貼り付けられます',
   clipPasted: '{h}×{w} を貼り付けました', clipPastedNew: '{h}×{w} を貼り付けました · {n} 色を追加',
   clipFull: '貼り付けていません · {n} 色の追加が必要ですが、空きは {r} 枠です（上限 {max}）',
@@ -729,6 +744,8 @@ const I18N = {
   sampleInfo: '{n} 帧 · {c} 色 · 总长 {ms} ms',
   noSamples: '（尚未生成样本 — 运行 node tools/build_editor_samples.js）',
   badJson: '不是有效的 JSON', canvasSize: '画布是 {w}×{h}，需要 {n}×{n}',
+  holdWhole: '第 {i} 帧的 hold 是 {v}，必须是整数毫秒（固件以 uint16_t 存储，小数会在编译时失败）',
+  holdFloor: '第 {i} 帧的 hold 是 {v} ms，低于 {min} ms 下限。固件每轮主循环才检查一次帧，更短的值不会被兑现',
   clipCopied: '已复制 {h}×{w} 到系统剪贴板 · 可粘贴到别的编辑器',
   clipPasted: '已粘贴 {h}×{w}', clipPastedNew: '已粘贴 {h}×{w} · 新增 {n} 色',
   clipFull: '没有粘贴 · 这块需要 {n} 个新色，调色板只剩 {r} 格（上限 {max}）',
@@ -1544,12 +1561,19 @@ function renderFrames() {
     d.appendChild(cv);
 
     const inp = document.createElement('input');
-    inp.type = 'number'; inp.value = f.hold; inp.min = 20; inp.step = 20; inp.title = t('holdTitle');
+    inp.type = 'number'; inp.value = f.hold; inp.min = HOLD_MIN; inp.step = 20; inp.title = t('holdTitle');
     // On input, not just on change: the total in the heading is the thing you
     // watch while tuning a hold, so it has to move as the number does. Change
     // additionally writes the clamped value back, or a field left blank reads
     // as empty while the frame is really holding 200 ms.
-    const commit = () => { f.hold = Math.max(20, +inp.value || 200); renderTiming(timing()); };
+    // Clamped and rounded rather than refused, because onchange writes the
+    // result back into the field: you watch 10 become 20 and 30.5 become 30, so
+    // nothing is decided behind your back. Import is the opposite — see
+    // checkHolds() — since a clamp there would silently rewrite a file.
+    const commit = () => {
+      f.hold = Math.max(HOLD_MIN, Math.round(+inp.value || 200));
+      renderTiming(timing());
+    };
     inp.oninput = commit;
     inp.onchange = () => { commit(); inp.value = f.hold; };
     inp.onclick = e => e.stopPropagation();
@@ -1781,6 +1805,23 @@ $('import').onclick = () => {
   try { d = JSON.parse($('importbox').value); }
   catch { msg.innerHTML = `<span class="warn">${t('badJson')}</span>`; return; }
 
+  // Refuse a bad hold instead of clamping it. The number field clamps because
+  // you see the result land in the field; a file does not get to watch. Loading
+  // a document and exporting it again is supposed to give back the same bytes,
+  // and a silent rewrite here is exactly how that stops being true — for one
+  // field, in one frame, noticed much later or never. Frame numbers are the
+  // ones on the tiles, so 1-based. Declared, not assigned, so it hoists over
+  // the call site further down this handler. See HOLD_MIN.
+  function checkHolds(frames) {
+    frames.forEach((f, i) => {
+      if (f.hold === undefined || f.hold === null) return;   // defaults to 200 below
+      if (typeof f.hold !== 'number' || !Number.isFinite(f.hold) || !Number.isInteger(f.hold))
+        throw new Error(t('holdWhole', {i: i + 1, v: JSON.stringify(f.hold)}));
+      if (f.hold < HOLD_MIN)
+        throw new Error(t('holdFloor', {i: i + 1, v: f.hold, min: HOLD_MIN}));
+    });
+  }
+
   try {
     if (Array.isArray(d.cells) && d.dict) {
       // makebead: one frame, dict + flat cells with nulls
@@ -1808,6 +1849,12 @@ $('import').onclick = () => {
       const side = d.frames[0].grid.length;
       if (d.frames.some(f => f.grid.length !== side || f.grid.some(r => r.length !== side)))
         throw new Error(t('canvasSize', {w: side, h: side, n: N}));
+      // Every check before the first mutation. adoptGridSize() and the palette
+      // assignment below are both destructive, and throwing between them leaves
+      // the open document holding the *incoming* palette over its own frames —
+      // 30 frames of somebody else's colours, from an import that reported
+      // itself as refused.
+      checkHolds(d.frames);
       adoptGridSize(side);
       palette = [...d.palette];
       frames = d.frames.map(f => ({ hold: f.hold || 200, grid: f.grid.map(r => [...r]) }));

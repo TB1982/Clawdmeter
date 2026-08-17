@@ -64,4 +64,30 @@ const GRID_SIZES = [20, 40, 60];
 // field an older reader ignores is not that — it stays 1.
 const CLIP_VERSION = 1;
 
-module.exports = {PALETTE_SIZE, GRID_SIZES, CLIP_VERSION};
+// Shortest hold a frame may declare, in ms, and holds must be whole ms.
+//
+// Not a taste call — two separate floors happen to land near each other:
+//
+//   - The firmware does not schedule frames, it polls them. splash.cpp advances
+//     on `millis() - frame_started_ms >= hold`, checked once per pass of the
+//     main loop, and main.cpp ends each pass with delay(5) plus a full-canvas
+//     flush to the panel. A hold shorter than one pass is not shown for that
+//     long; it is shown for however long the pass took. The number would be a
+//     promise nothing keeps.
+//   - Holds compile into a `uint16_t[]` initialiser in splash_animations.h, so
+//     a fractional hold is a narrowing conversion: it passes every check here,
+//     writes a valid-looking JSON, and then fails at the *firmware build* with
+//     an error that never mentions the animation, the frame, or the decimal
+//     point.
+//
+// 20 is generous against real use. Across the 1,270 frames in tree on
+// 2026-08-17 the shortest hold is 60 ms and there is not one fractional value,
+// so this rejects nothing anybody has drawn — it is a guard rail, not a budget.
+//
+// Deliberately a floor only. It does *not* constrain granularity: the scraped
+// claudepix rhythms include 83, 166, 332 and 498 ms (multiples of 1/12 s), and
+// rounding those to anything would change how the animations move. The editor's
+// step=20 moves its arrow buttons and nothing else.
+const HOLD_MIN_MS = 20;
+
+module.exports = {PALETTE_SIZE, GRID_SIZES, CLIP_VERSION, HOLD_MIN_MS};

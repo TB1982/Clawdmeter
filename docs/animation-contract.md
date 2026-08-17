@@ -290,6 +290,27 @@ the build. Run it after any rename.
 | `SPLASH_PALETTE_SIZE` | 36 | generated from `format.js` |
 | rate groups × slots | 4 × 9 | `splash.cpp:63` |
 | `CLIP_VERSION` | 1 | `tools/lib/format.js` (see § 7) |
+| `HOLD_MIN_MS` | 20 | `tools/lib/format.js` (see below) |
+
+**Frame holds.** A hold is a whole number of milliseconds, at least `HOLD_MIN_MS`.
+There is no upper bound below 65,535 — holds compile into a `uint16_t[]`.
+
+Both halves of that are enforced in `convert_to_c.js` rather than left to
+convention, because both fail far from their cause:
+
+- A **fractional** hold is a narrowing conversion in the generated
+  `uint16_t[]` initialiser. It passes every JSON-level check, then breaks the
+  *firmware* build with an error naming neither the animation nor the frame.
+- A hold **below the floor** is not honoured at runtime. `splash.cpp` does not
+  schedule frames, it polls them — `millis() - frame_started_ms >= hold`, once
+  per pass of the main loop, and each pass ends with `delay(5)` plus a
+  full-canvas flush. A hold shorter than a pass yields the pass, not the hold.
+
+The floor is **not** a granularity. Any whole value at or above it is exact, and
+that matters: several animations scraped from claudepix run on 1/12-second beats
+(83, 166, 332, 498 ms), which rounding to any coarser step would destroy. The
+editor's hold field carries `step="20"` for its arrow buttons only — a typed 310
+stays 310.
 
 A frame costs `side * side` bytes of flash: 400 at 20, 1,600 at 40, 3,600 at 60.
 A 25-frame animation is 10 KB, 40 KB or 90 KB. Fine for a few, not for all — the
