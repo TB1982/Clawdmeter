@@ -204,6 +204,16 @@ static void check_serial_cmd() {
             // sim's imu_hal_rotation_quadrant() is a hardcoded 0. Same reason
             // `party` exists: a state that otherwise needs a physical act, on
             // demand. Toggles, so a second `weather` puts back the last view.
+            // Which quadrant is the board in right now. imu.cpp prints on
+            // change, which tells you nothing if it has not moved — and the
+            // question that matters when the orientation gesture behaves
+            // backwards is "what does the board call the way it normally
+            // sits", which is a question about standing still.
+            else if (strcmp(cmd_buf, "rot") == 0) {
+                Serial.printf("ROT %u (has_rotation=%d)\n",
+                              imu_hal_rotation_quadrant(),
+                              (int)board_caps().has_rotation);
+            }
             else if (strcmp(cmd_buf, "weather") == 0) {
                 if (ui_get_current_screen() == SCREEN_WEATHER) ui_show_screen(SCREEN_USAGE);
                 else                                            ui_show_screen(SCREEN_WEATHER);
@@ -388,14 +398,32 @@ void loop() {
         // face-down as "no change", so laying the device flat holds the view
         // instead of flipping it.
         if (board_caps().has_rotation) {
-            static uint8_t   last_quadrant = 0;
+            const uint8_t home = board_caps().home_quadrant;
+            // A quarter turn either way from home, which is NOT quadrants 1 and
+            // 3: quadrant 0 is wherever the accelerometer calls level, and how
+            // the panel sits in its shell decides how that lines up with the way
+            // the board stands on a desk. On the 2.16 home is 3, so the pair
+            // here is 0 and 2 — the first cut hardcoded 1 and 3 and every
+            // reading on real hardware came out exactly inverted.
+            auto sideways = [home](uint8_t q) {
+                return q == (uint8_t)((home + 1) % 4) || q == (uint8_t)((home + 3) % 4);
+            };
+            static uint8_t   last_quadrant = home;
             static screen_t  before_turn   = SCREEN_USAGE;
             uint8_t q = imu_hal_rotation_quadrant();
             if (q != last_quadrant) {
-                bool was_sideways = (last_quadrant == 1 || last_quadrant == 3);
-                bool is_sideways  = (q == 1 || q == 3);
+                bool was_sideways = sideways(last_quadrant);
+                bool is_sideways  = sideways(q);
                 if (is_sideways && !was_sideways) {
-                    before_turn = ui_get_current_screen();
+                    // Never remember the weather view as the thing to go back
+                    // to. If it is already showing when the device is turned —
+                    // which the `weather` serial command can do, and which any
+                    // future way of reaching it could too — then remembering it
+                    // makes the return a no-op and the device is stuck on
+                    // weather at every angle, with no way back. The gesture must
+                    // stay reversible no matter what put the view there.
+                    screen_t cur = ui_get_current_screen();
+                    before_turn = (cur == SCREEN_WEATHER) ? SCREEN_USAGE : cur;
                     ui_show_screen(SCREEN_WEATHER);
                 } else if (!is_sideways && was_sideways) {
                     ui_show_screen(before_turn);

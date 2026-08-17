@@ -9,6 +9,7 @@ static const BoardCaps caps = {
         // True so the orientation-driven view selector is reachable here. It does
     // NOT mean the window rotates — see sim_rotation_quadrant().
     .has_rotation = true,
+    .home_quadrant = 0,   // the r key starts here, so here is home
     .has_battery = true,    // fake battery, adjustable with -/=
     .has_imu = true,     // faked by the r key
 };

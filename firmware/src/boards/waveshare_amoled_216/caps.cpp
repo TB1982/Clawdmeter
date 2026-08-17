@@ -7,6 +7,9 @@ static const BoardCaps caps = {
     .height = LCD_HEIGHT,
     .button_count = 2,
     .has_rotation = true,
+    // Measured with the `rot` serial command, board upright with its
+    // three buttons along the top edge: quadrant 3, not 0.
+    .home_quadrant = 3,
     .has_battery = true,
     .has_imu = true,
 };

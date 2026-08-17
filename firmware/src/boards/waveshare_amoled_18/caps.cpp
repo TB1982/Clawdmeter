@@ -7,6 +7,7 @@ static const BoardCaps caps = {
     .height = LCD_HEIGHT,
     .button_count = 1,
     .has_rotation = false,
+    .home_quadrant = 0,   // no rotation on this board; the field is inert
     .has_battery = true,
     .has_imu = true,
 };
