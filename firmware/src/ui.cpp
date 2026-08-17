@@ -1022,7 +1022,13 @@ void ui_show_screen(screen_t screen) {
     default: break;
     }
 
-    if (screen != SCREEN_SPLASH) prev_non_splash_screen = screen;
+    // The weather view is orientation-owned: you get there by turning the
+    // device and you leave by turning it back. It must therefore never become
+    // the "previous" view that a tap returns to, or tapping would alternate
+    // splash <-> weather forever and the usage screen would be unreachable by
+    // touch. Turning is the only way in, which is what makes turning back a
+    // reliable way out.
+    if (screen != SCREEN_SPLASH && screen != SCREEN_WEATHER) prev_non_splash_screen = screen;
     current_screen = screen;
     apply_battery_visibility();
     apply_corner_badge();

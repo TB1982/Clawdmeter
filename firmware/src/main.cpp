@@ -204,6 +204,16 @@ static void check_serial_cmd() {
             // sim's imu_hal_rotation_quadrant() is a hardcoded 0. Same reason
             // `party` exists: a state that otherwise needs a physical act, on
             // demand. Toggles, so a second `weather` puts back the last view.
+            // Which quadrant is the board in right now. imu.cpp prints on
+            // change, which tells you nothing if it has not moved — and the
+            // question that matters when the orientation gesture behaves
+            // backwards is "what does the board call the way it normally
+            // sits", which is a question about standing still.
+            else if (strcmp(cmd_buf, "rot") == 0) {
+                Serial.printf("ROT %u (has_rotation=%d)\n",
+                              imu_hal_rotation_quadrant(),
+                              (int)board_caps().has_rotation);
+            }
             else if (strcmp(cmd_buf, "weather") == 0) {
                 if (ui_get_current_screen() == SCREEN_WEATHER) ui_show_screen(SCREEN_USAGE);
                 else                                            ui_show_screen(SCREEN_WEATHER);
@@ -395,7 +405,15 @@ void loop() {
                 bool was_sideways = (last_quadrant == 1 || last_quadrant == 3);
                 bool is_sideways  = (q == 1 || q == 3);
                 if (is_sideways && !was_sideways) {
-                    before_turn = ui_get_current_screen();
+                    // Never remember the weather view as the thing to go back
+                    // to. If it is already showing when the device is turned —
+                    // which the `weather` serial command can do, and which any
+                    // future way of reaching it could too — then remembering it
+                    // makes the return a no-op and the device is stuck on
+                    // weather at every angle, with no way back. The gesture must
+                    // stay reversible no matter what put the view there.
+                    screen_t cur = ui_get_current_screen();
+                    before_turn = (cur == SCREEN_WEATHER) ? SCREEN_USAGE : cur;
                     ui_show_screen(SCREEN_WEATHER);
                 } else if (!is_sideways && was_sideways) {
                     ui_show_screen(before_turn);
