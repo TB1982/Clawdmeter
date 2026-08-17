@@ -265,6 +265,8 @@ static lv_obj_t* lbl_stock_sym[STOCK_ROWS]  = {};
 static lv_obj_t* lbl_stock_px[STOCK_ROWS]   = {};
 static lv_obj_t* lbl_stock_chg[STOCK_ROWS]  = {};
 static lv_obj_t* lbl_stock_state = nullptr;
+static splash_mini_t* coin_icon = nullptr;   // 'market coin', spins while trading
+static bool coin_spinning = false;
 static uint32_t  last_data_ms = 0;      // lv_tick when the last valid usage update landed
 static bool      data_received = false; // any valid update since boot
 static bool      data_ok = true;        // last payload's ok flag; a {"ok":false} beat = "no fresh data"
@@ -584,6 +586,18 @@ static void init_stocks_screen(lv_obj_t* scr) {
     lv_obj_set_style_text_color(lbl_stock_state, COL_DIM, 0);
     lv_obj_align(lbl_stock_state, LV_ALIGN_BOTTOM_MID, 0, L.anim_y);
 
+    // Same top-left slot the logo and the corner creature share, which
+    // apply_corner_badge() clears on this screen. It spins while the market is
+    // trading and holds still when it is not, so it reports something rather
+    // than only decorating — the same idea as the corner creature appearing
+    // only while the usage data is fresh.
+    coin_icon = splash_mini_create(stocks_container, "market coin",
+                                   L.small_icons ? LOGO_SMALL_WIDTH : LOGO_WIDTH);
+    if (lv_obj_t* cc = splash_mini_canvas(coin_icon)) {
+        lv_obj_set_pos(cc, L.margin, L.logo_y);
+        lv_obj_add_flag(cc, LV_OBJ_FLAG_HIDDEN);   // update_stocks() decides
+    }
+
     lv_obj_add_flag(stocks_container, LV_OBJ_FLAG_HIDDEN);
 }
 
@@ -601,6 +615,8 @@ static void update_stocks(const UsageData* d) {
 
     if (!d || d->stocks[0] == '\0') {
         lv_label_set_text(lbl_stock_state, "no tickers set");
+        if (lv_obj_t* cc = splash_mini_canvas(coin_icon)) lv_obj_add_flag(cc, LV_OBJ_FLAG_HIDDEN);
+        coin_spinning = false;
         return;
     }
 
@@ -639,6 +655,15 @@ static void update_stocks(const UsageData* d) {
         lv_obj_set_style_text_color(lbl_stock_chg[row], c, 0);
         row++;
     }
+
+    if (lv_obj_t* cc = splash_mini_canvas(coin_icon)) {
+        lv_obj_clear_flag(cc, LV_OBJ_FLAG_HIDDEN);
+        // Parked on the face rather than wherever the spin happened to stop —
+        // a coin frozen edge-on is a vertical bar, which reads as a glitch
+        // rather than as a coin at rest.
+        if (!d->stocks_open) splash_mini_set_frame(coin_icon, 0);
+    }
+    coin_spinning = d->stocks_open;
 
     lv_label_set_text(lbl_stock_state, d->stocks_open ? "market open" : "at last close");
     lv_obj_set_style_text_color(lbl_stock_state,
@@ -1044,6 +1069,13 @@ static void update_view_state(void) {
 }
 
 void ui_tick_anim(void) {
+    // The stocks screen has its own moving part. Ticked before the early
+    // return below, which exists to keep the usage screen's creatures from
+    // burning redraws while something else is on show.
+    if (current_screen == SCREEN_STOCKS) {
+        if (coin_spinning) splash_mini_tick(coin_icon);
+        return;
+    }
     if (current_screen != SCREEN_USAGE) return;
     update_view_state();
     // Only the visible creature ticks — the other one would just burn redraws.
