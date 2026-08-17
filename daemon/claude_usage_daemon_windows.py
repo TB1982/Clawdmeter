@@ -183,6 +183,136 @@ def add_clock_fields(payload: dict) -> None:
     payload["tf"] = tf
 
 
+_TICKER_RE = re.compile(r"^\d{4,6}$")
+# Cap deliberately low. The whole payload has to fit one BLE write, and the
+# usage fields already take about 130 bytes of it; four tickers is roughly
+# 60 more. It is also about what a 480px screen can show at a readable size.
+STOCKS_MAX = 4
+STOCKS_TTL = 60          # TWSE quotes move continuously; the poll cycle is 60s
+
+
+def read_stocks_setting() -> list[str]:
+    """Read `stocks = 2330,0050,00878` — Taiwan tickers only, digits only.
+
+    Returns [] when unset or unusable. These are the user's own holdings and
+    they live in the user's own config file; nothing here writes them anywhere
+    else, and config.example ships placeholders rather than anybody's actual
+    positions.
+    """
+    try:
+        if CONFIG_FILE.exists():
+            for line in CONFIG_FILE.read_text().splitlines():
+                line = line.split("#", 1)[0].strip()
+                if "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                if key.strip().lower() != "stocks":
+                    continue
+                val = val.strip()
+                if val.lower() in ("", "off"):
+                    return []
+                out = [t for t in (p.strip() for p in val.split(",")) if _TICKER_RE.match(t)]
+                return out[:STOCKS_MAX]
+    except OSError:
+        pass
+    return []
+
+
+def _tw_market_open(now: datetime.datetime) -> bool:
+    """Taiwan equities: 09:00-13:30, Monday to Friday.
+
+    Holidays are not modelled. On a closed holiday TWSE simply keeps returning
+    the previous close, and the device marks anything outside these hours as
+    closed anyway — so the failure mode is "correctly labelled as stale",
+    which is the one that does not mislead.
+    """
+    if now.weekday() >= 5:
+        return False
+    minutes = now.hour * 60 + now.minute
+    return 9 * 60 <= minutes < 13 * 60 + 30
+
+
+_stocks_cache: dict = {"at": 0.0, "field": None}
+
+
+async def add_stock_fields(payload: dict) -> None:
+    """Add "k" — a compact quote string — when `stocks` is configured.
+
+    Format, chosen to be short rather than pretty because it shares one BLE
+    write with everything else:
+
+        "k": "2330,2400.0,1.2|0050,106.45,-0.3"
+        "ko": 1                       # market open right now
+
+    ticker,last,percent-change, pipe separated. The device shows tickers rather
+    than company names because every font on it is an ASCII subset — the same
+    reason the degree sign is drawn rather than typed.
+
+    Source is TWSE's own MIS endpoint: no key, no account. It is what their
+    site calls rather than a documented API, so it is treated as best-effort —
+    any failure adds nothing and the device shows no quotes rather than old
+    ones.
+    """
+    tickers = read_stocks_setting()
+    if not tickers:
+        return
+
+    now = time.time()
+    if _stocks_cache["field"] and now - _stocks_cache["at"] < STOCKS_TTL:
+        payload["k"] = _stocks_cache["field"]
+        payload["ko"] = 1 if _tw_market_open(datetime.datetime.now()) else 0
+        return
+
+    # tse_ covers listed stocks and ETFs; otc_ covers the OTC board. Which one
+    # a ticker belongs to is not derivable from the number, so both are asked
+    # for and whichever answers wins.
+    channels = "|".join(f"tse_{t}.tw|otc_{t}.tw" for t in tickers)
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as http:
+            r = await http.get(
+                "https://mis.twse.com.tw/stock/api/getStockInfo.jsp",
+                params={"ex_ch": channels, "json": "1", "delay": "0"},
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            r.raise_for_status()
+            data = r.json()
+    except (httpx.HTTPError, ValueError, OSError) as e:
+        log(f"stocks fetch failed: {e}")
+        return
+
+    by_ticker: dict[str, str] = {}
+    for row in data.get("msgArray") or []:
+        code = row.get("c")
+        if not code or code in by_ticker:
+            continue
+        # z is the last trade; it is "-" outside trading or before the first
+        # match of the day, in which case y (previous close) is the honest
+        # number to show — flagged as closed by "ko".
+        last = row.get("z")
+        if not last or last == "-":
+            last = row.get("y")
+        prev = row.get("y")
+        try:
+            last_f = float(last)
+            prev_f = float(prev)
+            pct = ((last_f - prev_f) / prev_f * 100.0) if prev_f else 0.0
+        except (TypeError, ValueError):
+            continue
+        by_ticker[code] = f"{code},{last_f:g},{pct:+.1f}"
+
+    if not by_ticker:
+        return
+    # Keep the user's configured order rather than whatever TWSE returned.
+    field = "|".join(by_ticker[t] for t in tickers if t in by_ticker)
+    if not field:
+        return
+
+    _stocks_cache["at"] = now
+    _stocks_cache["field"] = field
+    payload["k"] = field
+    payload["ko"] = 1 if _tw_market_open(datetime.datetime.now()) else 0
+
+
 _WEATHER_RE = re.compile(r"^-?\d{1,3}(\.\d+)?,-?\d{1,3}(\.\d+)?$")
 
 
@@ -397,6 +527,7 @@ async def poll_api(token: str) -> dict | None:
     add_chime_field(payload)   # adds "c":1 iff the config opts in
     add_clock_fields(payload)   # adds "t" + "tf" iff the config opts in
     await add_weather_fields(payload)   # adds wx/wt/mp/mu iff a location is set
+    await add_stock_fields(payload)     # adds k/ko iff tickers are configured
     return payload
 
 

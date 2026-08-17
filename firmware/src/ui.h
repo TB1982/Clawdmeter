@@ -10,6 +10,7 @@ enum screen_t {
     // way to select it, which is deliberate: it is a gesture, and a board that
     // cannot sense the gesture should not carry a screen you cannot get to.
     SCREEN_WEATHER,
+    SCREEN_STOCKS,
     SCREEN_COUNT,
 };
 

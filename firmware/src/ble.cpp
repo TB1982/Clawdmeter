@@ -278,6 +278,12 @@ class RxCallbacks : public NimBLECharacteristicCallbacks {
             return;
         }
         std::string val = chr->getValue();
+        // The payload has to arrive in one ATT write, so the negotiated MTU is
+        // a hard ceiling on how much the daemon can ever say in one go. Printed
+        // with the length actually received: if a payload is ever silently
+        // truncated, these two numbers are what shows it.
+        Serial.printf("BLE: rx %u bytes (MTU %u)\n",
+                      (unsigned)val.length(), (unsigned)info.getMTU());
         size_t len = std::min(val.length(), (size_t)(BLE_BUF_SIZE - 1));
         memcpy(rx_buf, val.c_str(), len);
         rx_buf[len] = '\0';

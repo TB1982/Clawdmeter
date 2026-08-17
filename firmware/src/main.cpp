@@ -133,6 +133,8 @@ static bool parse_json(const char* json, UsageData* out) {
     out->weather_temp = doc["wt"] | 0.0f;
     out->moon_phase   = doc["mp"] | -1.0f;
     out->moon_up      = (doc["mu"] | 0) != 0;   // int, not bool — see the chime note above
+    strlcpy(out->stocks, doc["k"] | "", sizeof(out->stocks));
+    out->stocks_open  = (doc["ko"] | 0) != 0;
     out->ok = doc["ok"] | false;
     out->valid = true;
     return true;
@@ -213,6 +215,10 @@ static void check_serial_cmd() {
                 Serial.printf("ROT %u (has_rotation=%d)\n",
                               imu_hal_rotation_quadrant(),
                               (int)board_caps().has_rotation);
+            }
+            else if (strcmp(cmd_buf, "stocks") == 0) {
+                if (ui_get_current_screen() == SCREEN_STOCKS) ui_show_screen(SCREEN_USAGE);
+                else                                          ui_show_screen(SCREEN_STOCKS);
             }
             else if (strcmp(cmd_buf, "weather") == 0) {
                 if (ui_get_current_screen() == SCREEN_WEATHER) ui_show_screen(SCREEN_USAGE);
@@ -405,27 +411,41 @@ void loop() {
             // the board stands on a desk. On the 2.16 home is 3, so the pair
             // here is 0 and 2 — the first cut hardcoded 1 and 3 and every
             // reading on real hardware came out exactly inverted.
-            auto sideways = [home](uint8_t q) {
-                return q == (uint8_t)((home + 1) % 4) || q == (uint8_t)((home + 3) % 4);
+            // The two quarter turns now mean different things: one shows the
+            // weather, the other the quotes. Which physical direction is which
+            // depends on how the panel sits in its shell, so if they come out
+            // swapped in the hand it is these two lines that swap — nothing
+            // else in here knows or cares.
+            auto turned_view = [home](uint8_t q) -> screen_t {
+                if (q == (uint8_t)((home + 1) % 4)) return SCREEN_WEATHER;
+                if (q == (uint8_t)((home + 3) % 4)) return SCREEN_STOCKS;
+                return SCREEN_COUNT;                 // home, or upside down
             };
+            auto sideways = [&](uint8_t q) { return turned_view(q) != SCREEN_COUNT; };
             static uint8_t   last_quadrant = home;
             static screen_t  before_turn   = SCREEN_USAGE;
             uint8_t q = imu_hal_rotation_quadrant();
             if (q != last_quadrant) {
                 bool was_sideways = sideways(last_quadrant);
                 bool is_sideways  = sideways(q);
-                if (is_sideways && !was_sideways) {
-                    // Never remember the weather view as the thing to go back
-                    // to. If it is already showing when the device is turned —
-                    // which the `weather` serial command can do, and which any
-                    // future way of reaching it could too — then remembering it
-                    // makes the return a no-op and the device is stuck on
-                    // weather at every angle, with no way back. The gesture must
-                    // stay reversible no matter what put the view there.
+                if (is_sideways && was_sideways) {
+                    // Straight from one side to the other without settling at
+                    // home in between. The view has to follow, or turning the
+                    // long way round would leave the first one on screen.
+                    ui_show_screen(turned_view(q));
+                } else if (is_sideways) {
+                    // Never remember a turned view as the thing to go back to.
+                    // If one is already showing when the device is turned —
+                    // which the serial commands can do, and which any future
+                    // way of reaching them could too — then remembering it
+                    // makes the return a no-op, and the device is stuck at
+                    // every angle with no way home. The gesture has to stay
+                    // reversible whatever put the view there.
                     screen_t cur = ui_get_current_screen();
-                    before_turn = (cur == SCREEN_WEATHER) ? SCREEN_USAGE : cur;
-                    ui_show_screen(SCREEN_WEATHER);
-                } else if (!is_sideways && was_sideways) {
+                    before_turn = (cur == SCREEN_WEATHER || cur == SCREEN_STOCKS)
+                                ? SCREEN_USAGE : cur;
+                    ui_show_screen(turned_view(q));
+                } else if (was_sideways) {
                     ui_show_screen(before_turn);
                 }
                 last_quadrant = q;
