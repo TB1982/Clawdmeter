@@ -183,6 +183,156 @@ def add_clock_fields(payload: dict) -> None:
     payload["tf"] = tf
 
 
+_WEATHER_RE = re.compile(r"^-?\d{1,3}(\.\d+)?,-?\d{1,3}(\.\d+)?$")
+
+
+def read_weather_setting() -> str:
+    """Read the `weather` option. Returns "off", or "LAT,LON".
+
+    A coordinate pair rather than a place name: Open-Meteo takes coordinates,
+    and resolving a name would mean a second service, a second failure mode and
+    a second thing to be wrong about. Anything that is not a plausible pair —
+    including a typo — is "off", so a bad value never becomes a request with a
+    junk query.
+    """
+    try:
+        if CONFIG_FILE.exists():
+            for line in CONFIG_FILE.read_text().splitlines():
+                line = line.split("#", 1)[0].strip()
+                if "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                if key.strip().lower() == "weather":
+                    val = val.strip().replace(" ", "")
+                    if _WEATHER_RE.match(val):
+                        return val
+    except OSError:
+        pass
+    return "off"
+
+
+# Open-Meteo publishes on a 15-minute cadence and asks for no API key. Polling
+# it every cycle would be well over a thousand requests a day for at most 96
+# distinct answers; the cache is the difference between using a free service
+# and abusing one. In-process rather than on disk, because unlike the shell
+# daemon this one is a long-lived process.
+_weather_cache: dict = {"at": 0.0, "fields": {}}
+WEATHER_TTL = 600
+
+
+async def add_weather_fields(payload: dict) -> None:
+    """Add wx/wt (+ mp/mu) when `weather = LAT,LON` is configured.
+
+    Adds nothing at all when weather is off, the request fails, or the response
+    does not parse — the payload is then exactly what it was, and the firmware's
+    `doc["wx"] | -1` shows "no weather" rather than stale weather.
+
+      wx  WMO weather code, sent raw so that what counts as "raining" stays a
+          device decision
+      wt  temperature, degrees C
+      mp  moon phase 0..1 (0 new, .25 first quarter, .5 full)
+      mu  1 when the moon is above the horizon *right now*
+
+    mu is not "is it dark". The moon spends much of most nights below the
+    horizon and plenty of days above it, so this compares the clock against
+    moonrise/moonset rather than against sunset. Those two timestamps come back
+    on the same request as the temperature, so getting it right is free.
+    """
+    loc = read_weather_setting()
+    if loc == "off":
+        return
+
+    now = time.time()
+    if _weather_cache["fields"] and now - _weather_cache["at"] < WEATHER_TTL:
+        payload.update(_weather_cache["fields"])
+        return
+
+    lat, lon = loc.split(",", 1)
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as http:
+            r = await http.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": lat, "longitude": lon,
+                    "current": "temperature_2m,weather_code",
+                    "daily": "moon_phase,moonrise,moonset",
+                    "timezone": "auto", "forecast_days": 1,
+                },
+            )
+            r.raise_for_status()
+            data = r.json()
+    except (httpx.HTTPError, ValueError, OSError) as e:
+        log(f"weather fetch failed: {e}")
+        return
+
+    try:
+        cur = data["current"]
+        # Both or neither: a temperature with no code would render as weather
+        # the device cannot name, and a code with no temperature as a blank.
+        fields = {"wx": int(cur["weather_code"]), "wt": float(cur["temperature_2m"])}
+    except (KeyError, TypeError, ValueError):
+        return
+
+    try:
+        daily = data["daily"]
+        phase = float(daily["moon_phase"][0])
+        rise = datetime.datetime.fromisoformat(daily["moonrise"][0])
+        set_ = datetime.datetime.fromisoformat(daily["moonset"][0])
+        # timezone=auto made these local to the coordinates, so compare against
+        # local wall-clock time of day. Crossing midnight is the normal case:
+        # when moonset falls earlier in the day than moonrise, the moon is up
+        # from rise through midnight to set, and the test inverts.
+        t = datetime.datetime.now().time()
+        up = (rise.time() <= t < set_.time()) if rise.time() <= set_.time() \
+            else (t >= rise.time() or t < set_.time())
+        fields["mp"] = phase
+        fields["mu"] = 1 if up else 0
+    except (KeyError, TypeError, ValueError, IndexError):
+        pass       # weather without the moon is still weather
+
+    _weather_cache["at"] = now
+    _weather_cache["fields"] = fields
+    payload.update(fields)
+
+
+def detect_hour_format() -> int:
+    """Best-effort 12h/24h detection for the host. Returns 12 or 24 (default 24)."""
+    # macOS: the explicit System Settings toggle lives in NSGlobalDomain.
+    for key, result in (("AppleICUForce24HourTime", 24), ("AppleICUForce12HourTime", 12)):
+        try:
+            out = subprocess.run(["defaults", "read", "-g", key],
+                                 capture_output=True, text=True, timeout=3)
+            if out.stdout.strip() == "1":
+                return result
+        except (OSError, subprocess.SubprocessError):
+            pass
+    # Fallback to the C locale's time format (may be C/24h under launchd).
+    try:
+        import locale
+        locale.setlocale(locale.LC_TIME, "")
+        fmt = locale.nl_langinfo(locale.T_FMT)
+        if "%p" in fmt or "%r" in fmt or "%I" in fmt:
+            return 12
+    except (ImportError, locale.Error, AttributeError):
+        pass
+    return 24
+
+
+def add_clock_fields(payload: dict) -> None:
+    """Add wall-clock fields to the payload when the config opts in.
+
+    "t"  = local wall-clock epoch (UTC epoch shifted by the tz offset) so the
+           device can show the time without an RTC.
+    "tf" = 12 or 24, the hour format the device should render.
+    """
+    clock = read_clock_setting()
+    if clock == "off":
+        return
+    tf = 24 if clock == "24" else 12 if clock == "12" else detect_hour_format()
+    payload["t"] = int(time.time()) + time.localtime().tm_gmtoff
+    payload["tf"] = tf
+
+
 async def poll_api(token: str) -> dict | None:
     headers = dict(API_HEADERS_TEMPLATE)
     headers["Authorization"] = f"Bearer {token}"
@@ -246,6 +396,7 @@ async def poll_api(token: str) -> dict | None:
         }
     add_chime_field(payload)   # adds "c":1 iff the config opts in
     add_clock_fields(payload)   # adds "t" + "tf" iff the config opts in
+    await add_weather_fields(payload)   # adds wx/wt/mp/mu iff a location is set
     return payload
 
 

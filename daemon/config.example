@@ -30,3 +30,21 @@ chime = off
 #   12   = show the clock, forced 12-hour  (e.g. 6:28 PM)
 #   24   = show the clock, forced 24-hour  (e.g. 18:28)
 clock = off
+# Weather on the device, fetched by this daemon and sent along with the usage
+# data — the board does no networking of its own and never sees an API key.
+# Turn the device a quarter turn to show it (boards with an IMU: AMOLED-2.16).
+#
+# Source is Open-Meteo, which needs no account and no key. A coordinate pair,
+# not a place name: Open-Meteo takes coordinates, and resolving a name would
+# mean a second service and a second thing to be wrong about. Anything that is
+# not a plausible pair — including a typo — is treated as off.
+#
+# Also carries the moon: the phase icon appears only while the moon is actually
+# above the horizon, which is not the same as "it is night".
+#
+# Fetched at most once every 10 minutes regardless of the poll interval;
+# Open-Meteo publishes every 15 and asks nothing in return.
+#
+#   off             = no weather (default)
+#   LAT,LON         = e.g. 25.03,121.56 for Taipei
+weather = off
