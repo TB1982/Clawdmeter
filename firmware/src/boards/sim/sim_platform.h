@@ -18,6 +18,7 @@ bool sim_take_pwr_long(void);
 bool sim_take_pwr_released(void);
 int  sim_battery_pct(void);
 bool sim_charging(void);
+int  sim_rotation_quadrant(void);
 
 // Scripted input (SIM_SCRIPT), consumed by touch.cpp. While a scripted tap is
 // held this returns true and overrides the mouse; otherwise touch.cpp reads

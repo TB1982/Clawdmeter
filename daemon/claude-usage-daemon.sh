@@ -84,6 +84,119 @@ read_chime_setting() {
     esac
 }
 
+# Read the `weather` option from the config file. Echoes "off", or "LAT,LON".
+# Defaults to "off" — same posture as chime and clock: the device shows nothing
+# new until the user asks for it.
+#
+# The value is a coordinate pair rather than a place name because Open-Meteo
+# takes coordinates and resolving a name would mean a second service, a second
+# failure mode, and a second thing to be wrong about.
+read_weather_setting() {
+    local val=""
+    if [ -f "$CONFIG_FILE" ]; then
+        val=$(grep -E '^[[:space:]]*weather[[:space:]]*=' "$CONFIG_FILE" | tail -1 \
+            | tr -d '\r' \
+            | sed -E 's/^[[:space:]]*weather[[:space:]]*=[[:space:]]*//; s/[[:space:]]*(#.*)?$//' \
+            | tr -d ' ')
+    fi
+    # Anything that is not a plausible coordinate pair is "off", including a
+    # typo. A malformed value must not become a request with a junk query.
+    if echo "$val" | grep -qE '^-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,3}(\.[0-9]+)?$'; then
+        echo "$val"
+    else
+        echo "off"
+    fi
+}
+
+# Fetch current conditions from Open-Meteo and echo a JSON fragment:
+#   ,"wx":<WMO weather code>,"wt":<temperature C, one decimal>
+# Echoes nothing if weather is off, the fetch fails, or the response does not
+# parse — the payload is then exactly what it was before, and the firmware's
+# `doc["wx"] | -1` default leaves the device showing no weather rather than
+# stale weather.
+#
+# Cached on disk. Open-Meteo publishes on a 15-minute cadence and asks for no
+# API key; polling it every TICK would be 1,440 requests a day for at most 96
+# distinct answers. The cache is the difference between using a free service
+# and abusing one.
+WEATHER_CACHE_FILE="$HOME/.config/claude-usage-monitor/weather-cache"
+WEATHER_CACHE_TTL=600     # 10 min, under Open-Meteo's 15-min publish cadence
+
+fetch_weather_fragment() {
+    local loc
+    loc=$(read_weather_setting)
+    [ "$loc" = "off" ] && return 0
+
+    local now cached_at cached_frag
+    now=$(date +%s)
+    if [ -f "$WEATHER_CACHE_FILE" ]; then
+        cached_at=$(head -1 "$WEATHER_CACHE_FILE" 2>/dev/null)
+        cached_frag=$(tail -1 "$WEATHER_CACHE_FILE" 2>/dev/null)
+        case "$cached_at" in
+            ''|*[!0-9]*) ;;                       # unusable stamp, refetch
+            *) if [ $(( now - cached_at )) -lt "$WEATHER_CACHE_TTL" ]; then
+                   echo "$cached_frag"
+                   return 0
+               fi ;;
+        esac
+    fi
+
+    local lat="${loc%%,*}" lon="${loc##*,}"
+    local body
+    # moon_phase / moonrise / moonset ride on the same request — Open-Meteo
+    # returns them from the one call, so the moon costs no extra traffic.
+    body=$(curl -s --max-time 8 \
+        "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=moon_phase,moonrise,moonset&timezone=auto&forecast_days=1" \
+        2>/dev/null) || return 0
+    [ -z "$body" ] && return 0
+
+    local code temp
+    code=$(echo "$body" | grep -o '"weather_code":[0-9-]*'      | tail -1 | cut -d: -f2)
+    temp=$(echo "$body" | grep -o '"temperature_2m":-\?[0-9.]*' | tail -1 | cut -d: -f2)
+    # Both or neither. A temperature with no code would render as weather the
+    # device cannot name, and a code with no temperature as a blank number.
+    case "$code$temp" in
+        ''|*[!0-9.-]*) return 0 ;;
+    esac
+    [ -z "$code" ] || [ -z "$temp" ] && return 0
+
+    local frag=",\"wx\":${code},\"wt\":${temp}"
+
+    # Moon, appended only if the whole set parses. Two separate facts:
+    #
+    #   mp  phase 0..1  (0 new, 0.25 first quarter, 0.5 full, 0.75 last)
+    #   mu  1 when the moon is above the horizon right now
+    #
+    # `mu` is not "is it dark". Tonight in Taipei the moon rises at 09:39 and
+    # sets at 21:10, so from 21:10 until tomorrow's moonrise the sky is dark and
+    # there is no moon in it — an icon shown on darkness alone would be wrong
+    # for most of the night. The two timestamps are in the request already, so
+    # getting this right costs a comparison.
+    local phase rise set
+    phase=$(echo "$body" | grep -o '"moon_phase":\[[0-9.]*'  | head -1 | sed 's/.*\[//')
+    rise=$( echo "$body" | grep -o '"moonrise":\["[^"]*"'    | head -1 | sed 's/.*\["//;s/"$//')
+    set=$(  echo "$body" | grep -o '"moonset":\["[^"]*"'     | head -1 | sed 's/.*\["//;s/"$//')
+    if [ -n "$phase" ] && [ -n "$rise" ] && [ -n "$set" ]; then
+        # Compare as HHMM integers in the location's own local time, which is
+        # what timezone=auto made these. Crossing midnight is the normal case:
+        # when moonset is earlier in the day than moonrise the moon is up from
+        # rise through midnight to set, so the test inverts.
+        local now_hm rise_hm set_hm up
+        now_hm=$(date +%H%M); now_hm=$((10#$now_hm))
+        rise_hm=$(echo "$rise" | cut -dT -f2 | tr -d ':'); rise_hm=$((10#$rise_hm))
+        set_hm=$( echo "$set"  | cut -dT -f2 | tr -d ':'); set_hm=$((10#$set_hm))
+        if [ "$rise_hm" -le "$set_hm" ]; then
+            up=$([ "$now_hm" -ge "$rise_hm" ] && [ "$now_hm" -lt "$set_hm" ] && echo 1 || echo 0)
+        else
+            up=$([ "$now_hm" -ge "$rise_hm" ] || [ "$now_hm" -lt "$set_hm" ] && echo 1 || echo 0)
+        fi
+        frag="${frag},\"mp\":${phase},\"mu\":${up}"
+    fi
+    mkdir -p "$(dirname "$WEATHER_CACHE_FILE")" 2>/dev/null
+    printf '%s\n%s\n' "$now" "$frag" > "$WEATHER_CACHE_FILE" 2>/dev/null
+    echo "$frag"
+}
+
 # Read the `clock` option from the config file. Echoes one of: off|auto|12|24.
 # Defaults to "off" so existing setups keep showing "Usage" until opted in.
 read_clock_setting() {
@@ -326,6 +439,11 @@ build_payload_for_token() {
     chime=$(read_chime_setting)
     [ "$chime" = "on" ] && chime_fragment=",\"c\":1"
 
+    # Optional weather, same additive shape as the two fragments above: empty
+    # unless configured, and never partially populated.
+    local weather_fragment=""
+    weather_fragment=$(fetch_weather_fragment)
+
     local payload
     if [ -n "$s5h_util" ]; then
         # Pro/Max account — 5h/7d windows
@@ -337,13 +455,13 @@ build_payload_for_token() {
         s5h_util=${s5h_util:-0}; s5h_reset=${s5h_reset:-0}
         s7d_util=${s7d_util:-0}; s7d_reset=${s7d_reset:-0}
         s5h_status=${s5h_status:-unknown}
-        payload=$(awk -v u5="$s5h_util" -v r5="$s5h_reset" -v u7="$s7d_util" -v r7="$s7d_reset" -v st="$s5h_status" -v now="$now" -v clk="$clock_fragment" -v chm="$chime_fragment" \
+        payload=$(awk -v u5="$s5h_util" -v r5="$s5h_reset" -v u7="$s7d_util" -v r7="$s7d_reset" -v st="$s5h_status" -v now="$now" -v clk="$clock_fragment" -v chm="$chime_fragment" -v wxf="$weather_fragment" \
             'BEGIN {
                 sp = sprintf("%.0f", u5 * 100);
                 sr = (r5 - now) / 60; sr = sr > 0 ? sprintf("%.0f", sr) : 0;
                 wp = sprintf("%.0f", u7 * 100);
                 wr = (r7 - now) / 60; wr = wr > 0 ? sprintf("%.0f", wr) : 0;
-                printf "{\"s\":%s,\"sr\":%s,\"w\":%s,\"wr\":%s,\"st\":\"%s\",\"acct\":\"pro\"%s%s,\"ok\":true}", sp, sr, wp, wr, st, clk, chm;
+                printf "{\"s\":%s,\"sr\":%s,\"w\":%s,\"wr\":%s,\"st\":\"%s\",\"acct\":\"pro\"%s%s%s,\"ok\":true}", sp, sr, wp, wr, st, clk, chm, wxf;
             }')
     else
         # Enterprise account — spending-limit model
@@ -365,7 +483,7 @@ rd = f"{dt_end.strftime('%b')} {dt_end.day}"
 print(json.dumps({"tp": tp, "pd": pd_days, "rd": rd}))
 PYEOF
 )
-        payload=$(awk -v ou="$overage_util" -v or_="$overage_reset" -v st="$status" -v now="$now" -v pi="$period_info" -v clk="$clock_fragment" -v chm="$chime_fragment" \
+        payload=$(awk -v ou="$overage_util" -v or_="$overage_reset" -v st="$status" -v now="$now" -v pi="$period_info" -v clk="$clock_fragment" -v chm="$chime_fragment" -v wxf="$weather_fragment" \
             'BEGIN {
                 sp = sprintf("%.0f", ou * 100);
                 sr = (or_ - now) / 60; sr = sr > 0 ? sprintf("%.0f", sr) : 0;
@@ -374,7 +492,7 @@ PYEOF
                 match(pi, /"tp": *([0-9]+)/, a); if (RSTART) tp = a[1];
                 match(pi, /"pd": *([0-9]+)/, b); if (RSTART) pd = b[1];
                 match(pi, /"rd": *"([^"]+)"/, c); if (RSTART) rd = c[1];
-                printf "{\"s\":%s,\"sr\":%s,\"w\":0,\"wr\":0,\"st\":\"%s\",\"acct\":\"ent\",\"tp\":%s,\"pd\":%s,\"rd\":\"%s\"%s%s,\"ok\":true}", sp, sr, st, tp, pd, rd, clk, chm;
+                printf "{\"s\":%s,\"sr\":%s,\"w\":0,\"wr\":0,\"st\":\"%s\",\"acct\":\"ent\",\"tp\":%s,\"pd\":%s,\"rd\":\"%s\"%s%s%s,\"ok\":true}", sp, sr, st, tp, pd, rd, clk, chm, wxf;
             }')
     fi
 

@@ -331,7 +331,27 @@ See `~/.claude/projects/.../memory/` files for persistent context (user is an em
 
 ## Daemon / host side
 
-Bash daemon (`daemon/claude-usage-daemon.sh`) reads OAuth token, polls Anthropic API, sends JSON over BLE GATT. Run with `systemctl --user start claude-usage-daemon`. The unit file's `ExecStart` is the absolute path to the script — repoint it when switching between the worktree and the main checkout.
+**There are three daemons, not one, and they are separate implementations of
+the same protocol.** Adding a payload field means adding it three times:
+
+| file | platform | how it is started |
+|---|---|---|
+| `daemon/claude-usage-daemon.sh` | Linux | `systemctl --user start claude-usage-daemon` |
+| `daemon/claude_usage_daemon.py` | **macOS** | launchd, `~/Library/LaunchAgents/com.user.claude-usage-daemon.plist` |
+| `daemon/claude_usage_daemon_windows.py` | Windows | `daemon/autostart_windows.py` |
+
+Nova's own machine is macOS, so **the one running on the desk with the board on
+it is the Python one**. On 2026-08-17 the weather fields went into the shell
+daemon alone and nothing appeared on the device, because the shell daemon is
+not what was running. Check `ps` / the plist before editing, not after.
+
+The Python pair share a structure (`add_chime_field` / `add_clock_fields` /
+`add_weather_fields`, each a no-op unless the config opts in), so a new field is
+usually one function lifted verbatim from one to the other.
+
+The shell daemon reads the OAuth token, polls the Anthropic API, and sends JSON
+over BLE GATT. The systemd unit's `ExecStart` is the absolute path to the script
+— repoint it when switching between the worktree and the main checkout.
 
 **Discovery & resilience:**
 

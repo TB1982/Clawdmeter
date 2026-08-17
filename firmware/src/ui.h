@@ -5,6 +5,11 @@
 enum screen_t {
     SCREEN_SPLASH,
     SCREEN_USAGE,
+    // Reached by turning the device, not by a button — see the orientation
+    // block in main.cpp. Boards whose BoardCaps.has_rotation is false have no
+    // way to select it, which is deliberate: it is a gesture, and a board that
+    // cannot sense the gesture should not carry a screen you cannot get to.
+    SCREEN_WEATHER,
     SCREEN_COUNT,
 };
 

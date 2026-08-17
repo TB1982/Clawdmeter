@@ -11,7 +11,7 @@ it cannot disagree with the build. For *why* an animation looks the way it does,
 see [`animation-craft.md`](animation-craft.md); for how the pipeline works, see
 [`../tools/README.md`](../tools/README.md).
 
-26 animations are compiled in. The splash shows one for **20,000 ms** and then advances to the next entry in the group the current
+27 animations are compiled in. The splash shows one for **20,000 ms** and then advances to the next entry in the group the current
 usage rate selects, wrapping at the end. The order below *is* the playback order:
 slot 0 is what you meet at boot, and the last slot is what loops back into it.
 
@@ -76,6 +76,7 @@ A ✓ means the loop divides the slot exactly, so it is never cut part-way. 7 of
 | opening | `SPLASH_OPENING_ANIM` |
 | hanabi | `SPLASH_CELEBRATE_ANIM` |
 | magnifier | named directly by `ui.cpp` |
+| moon phases | named directly by `ui.cpp` |
 
 A name in this table cannot be excluded from the build without breaking the
 thing that asks for it — unlike a group entry, which only stops being picked.
