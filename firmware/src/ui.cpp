@@ -64,6 +64,10 @@ struct Layout {
     int16_t weather_deg_bw;          // degree ring stroke
     int16_t weather_deg_dy;          // degree ring, offset down from the number's top
 
+    // Stocks screen
+    int16_t stock_row_h;             // vertical pitch between quote rows
+    int16_t stock_top;               // first row's y
+
     // Bluetooth screen
     int16_t bt_info_panel_h;
     int16_t bt_reset_zone_h;
@@ -113,6 +117,8 @@ static void compute_layout(const BoardCaps& c) {
     L.weather_deg_px = 16;
     L.weather_deg_bw = 4;
     L.weather_deg_dy = 10;
+    L.stock_row_h = 74;
+    L.stock_top = 118;
 
     if (c.height >= 460) {
         // Large layout — tuned for 480x480 (AMOLED-2.16).
@@ -181,6 +187,8 @@ static void compute_layout(const BoardCaps& c) {
         L.weather_deg_px = 9;
         L.weather_deg_bw = 2;
         L.weather_deg_dy = 5;
+        L.stock_row_h = 38;
+        L.stock_top = 56;
         L.bt_info_panel_h = 90;
         L.bt_reset_zone_h = 60;
         L.bt_title_font    = &font_tiempos_34;
@@ -251,6 +259,12 @@ static lv_obj_t* lbl_weather_temp = nullptr;
 static lv_obj_t* lbl_weather_cond = nullptr;
 static lv_obj_t* weather_deg     = nullptr;   // the ° ring, drawn not typed
 static splash_mini_t* moon_icon  = nullptr;   // 'moon phases', one frame pinned
+#define STOCK_ROWS 4
+static lv_obj_t* stocks_container = nullptr;
+static lv_obj_t* lbl_stock_sym[STOCK_ROWS]  = {};
+static lv_obj_t* lbl_stock_px[STOCK_ROWS]   = {};
+static lv_obj_t* lbl_stock_chg[STOCK_ROWS]  = {};
+static lv_obj_t* lbl_stock_state = nullptr;
 static uint32_t  last_data_ms = 0;      // lv_tick when the last valid usage update landed
 static bool      data_received = false; // any valid update since boot
 static bool      data_ok = true;        // last payload's ok flag; a {"ok":false} beat = "no fresh data"
@@ -512,6 +526,125 @@ static void build_idle_group(lv_obj_t* parent) {
     lv_obj_add_flag(idle_group, LV_OBJ_FLAG_HIDDEN);  // update_view_state decides
 }
 
+// ======== Stocks screen ========
+//
+// Four rows at most, because that is what the daemon sends and what fits at a
+// size readable from an angle. Tickers rather than company names: every font
+// here is an ASCII subset, so 台積電 would render as boxes — the same
+// constraint that made the degree sign a drawn circle.
+static void init_stocks_screen(lv_obj_t* scr) {
+    stocks_container = lv_obj_create(scr);
+    lv_obj_set_size(stocks_container, L.scr_w, L.scr_h);
+    lv_obj_set_pos(stocks_container, 0, 0);
+    lv_obj_set_style_bg_opa(stocks_container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(stocks_container, 0, 0);
+    lv_obj_set_style_pad_all(stocks_container, 0, 0);
+    lv_obj_clear_flag(stocks_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(stocks_container, global_click_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t* t = lv_label_create(stocks_container);
+    lv_label_set_text(t, "Stocks");
+    lv_obj_set_style_text_font(t, L.title_font, 0);
+    lv_obj_set_style_text_color(t, COL_TEXT, 0);
+    lv_obj_align(t, LV_ALIGN_TOP_MID, L.title_nudge, L.title_y);
+
+    for (int i = 0; i < STOCK_ROWS; i++) {
+        const int y = L.stock_top + i * L.stock_row_h;
+
+        lbl_stock_sym[i] = lv_label_create(stocks_container);
+        lv_label_set_text(lbl_stock_sym[i], "");
+        lv_obj_set_style_text_font(lbl_stock_sym[i], L.reset_font, 0);
+        lv_obj_set_style_text_color(lbl_stock_sym[i], COL_DIM, 0);
+        lv_obj_set_pos(lbl_stock_sym[i], L.margin, y);
+
+        // Price right-aligned against the change column, change against the
+        // right margin, so the decimal points and the signs each line up down
+        // the screen instead of drifting with the width of the number.
+        lbl_stock_chg[i] = lv_label_create(stocks_container);
+        lv_label_set_text(lbl_stock_chg[i], "");
+        lv_obj_set_style_text_font(lbl_stock_chg[i], L.reset_font, 0);
+        lv_obj_set_style_text_align(lbl_stock_chg[i], LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_width(lbl_stock_chg[i], L.scr_w / 4);
+        lv_obj_set_pos(lbl_stock_chg[i], L.scr_w - L.margin - L.scr_w / 4, y);
+
+        lbl_stock_px[i] = lv_label_create(stocks_container);
+        lv_label_set_text(lbl_stock_px[i], "");
+        lv_obj_set_style_text_font(lbl_stock_px[i], L.reset_font, 0);
+        lv_obj_set_style_text_align(lbl_stock_px[i], LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_width(lbl_stock_px[i], L.scr_w / 3);
+        lv_obj_set_pos(lbl_stock_px[i], L.scr_w - L.margin - L.scr_w / 4 - L.scr_w / 3 - 8, y);
+    }
+
+    // Whether these numbers are live or a leftover close. Most of any given day
+    // the market is shut, so an unlabelled price would be the device telling a
+    // quiet lie for the majority of its waking hours.
+    lbl_stock_state = lv_label_create(stocks_container);
+    lv_label_set_text(lbl_stock_state, "");
+    lv_obj_set_style_text_font(lbl_stock_state, L.pace_font, 0);
+    lv_obj_set_style_text_color(lbl_stock_state, COL_DIM, 0);
+    lv_obj_align(lbl_stock_state, LV_ALIGN_BOTTOM_MID, 0, L.anim_y);
+
+    lv_obj_add_flag(stocks_container, LV_OBJ_FLAG_HIDDEN);
+}
+
+// Split "2317,255,-1.7|0050,106.45,+0.0" into rows. Parsed here rather than in
+// the daemon payload because the device only prints it, and a struct would fix
+// the maximum count in a second place.
+static void update_stocks(const UsageData* d) {
+    if (!lbl_stock_sym[0]) return;
+
+    for (int i = 0; i < STOCK_ROWS; i++) {
+        lv_label_set_text(lbl_stock_sym[i], "");
+        lv_label_set_text(lbl_stock_px[i], "");
+        lv_label_set_text(lbl_stock_chg[i], "");
+    }
+
+    if (!d || d->stocks[0] == '\0') {
+        lv_label_set_text(lbl_stock_state, "no tickers set");
+        return;
+    }
+
+    char buf[sizeof(((UsageData*)0)->stocks)];
+    strlcpy(buf, d->stocks, sizeof(buf));
+
+    int row = 0;
+    char* save_row = nullptr;
+    for (char* rec = strtok_r(buf, "|", &save_row);
+         rec && row < STOCK_ROWS;
+         rec = strtok_r(nullptr, "|", &save_row)) {
+        char* save_f = nullptr;
+        const char* sym = strtok_r(rec, ",", &save_f);
+        const char* px  = strtok_r(nullptr, ",", &save_f);
+        const char* chg = strtok_r(nullptr, ",", &save_f);
+        if (!sym || !px || !chg) continue;      // malformed record: skip, keep the rest
+
+        lv_label_set_text(lbl_stock_sym[row], sym);
+        lv_label_set_text(lbl_stock_px[row], px);
+        lv_label_set_text(lbl_stock_chg[row], chg);
+        // RED for up and GREEN for down — the Taiwan convention, and the
+        // opposite of the Anglo-American one. Nova had to point this out; the
+        // first cut used red-for-down and would have read as a loss on every
+        // good day. These quotes are Taiwan-only by choice, so the local
+        // convention is simply the correct one here. If this screen ever shows
+        // a US listing, the colour has to follow that market rather than this
+        // one, which means the convention belongs with the quote and not with
+        // the widget.
+        //
+        // Flat stays plain: outside trading hours every line is +0.0, and
+        // colouring a zero would show a move that did not happen.
+        lv_color_t c = COL_TEXT;
+        if      (chg[0] == '+' && !(chg[1] == '0' && chg[3] == '0')) c = COL_RED;
+        else if (chg[0] == '-' && !(chg[1] == '0' && chg[3] == '0')) c = COL_GREEN;
+        lv_obj_set_style_text_color(lbl_stock_px[row], COL_TEXT, 0);
+        lv_obj_set_style_text_color(lbl_stock_chg[row], c, 0);
+        row++;
+    }
+
+    lv_label_set_text(lbl_stock_state, d->stocks_open ? "market open" : "at last close");
+    lv_obj_set_style_text_color(lbl_stock_state,
+                                d->stocks_open ? COL_TEXT : COL_DIM, 0);
+}
+
 // ======== Weather screen ========
 //
 // Reached by turning the device a quarter turn, so it is built to be read at a
@@ -747,6 +880,7 @@ void ui_init(void) {
 
     init_usage_screen(scr);
     init_weather_screen(scr);
+    init_stocks_screen(scr);
     splash_init(scr);
 
     if (splash_get_root()) {
@@ -805,6 +939,7 @@ void ui_update(const UsageData* data) {
     // turning the device must not be the thing that fetches the data, or the
     // first second after the turn would show the previous reading.
     update_weather(data);
+    update_stocks(data);
 
     if (data->clock_epoch > 0) {    // daemon supplied wall-clock time → drive the title clock
         clock_base_epoch = data->clock_epoch;
@@ -985,7 +1120,7 @@ static void apply_corner_badge(void) {
     // creature live on the screen root rather than inside a view container, so
     // without this they would simply draw on top of it. Clawd is still on the
     // splash and the usage screen; here the sky gets the corner.
-    if (current_screen == SCREEN_WEATHER) {
+    if (current_screen == SCREEN_WEATHER || current_screen == SCREEN_STOCKS) {
         if (logo_img) lv_obj_add_flag(logo_img, LV_OBJ_FLAG_HIDDEN);
         if (badge)    lv_obj_add_flag(badge, LV_OBJ_FLAG_HIDDEN);
         return;
@@ -1011,6 +1146,7 @@ static void global_click_cb(lv_event_t* e) {
 void ui_show_screen(screen_t screen) {
     lv_obj_add_flag(usage_container, LV_OBJ_FLAG_HIDDEN);
     if (weather_container) lv_obj_add_flag(weather_container, LV_OBJ_FLAG_HIDDEN);
+    if (stocks_container)  lv_obj_add_flag(stocks_container, LV_OBJ_FLAG_HIDDEN);
     splash_hide();
 
     switch (screen) {
@@ -1018,6 +1154,9 @@ void ui_show_screen(screen_t screen) {
     case SCREEN_USAGE:   lv_obj_clear_flag(usage_container, LV_OBJ_FLAG_HIDDEN); break;
     case SCREEN_WEATHER:
         if (weather_container) lv_obj_clear_flag(weather_container, LV_OBJ_FLAG_HIDDEN);
+        break;
+    case SCREEN_STOCKS:
+        if (stocks_container) lv_obj_clear_flag(stocks_container, LV_OBJ_FLAG_HIDDEN);
         break;
     default: break;
     }
@@ -1028,7 +1167,8 @@ void ui_show_screen(screen_t screen) {
     // splash <-> weather forever and the usage screen would be unreachable by
     // touch. Turning is the only way in, which is what makes turning back a
     // reliable way out.
-    if (screen != SCREEN_SPLASH && screen != SCREEN_WEATHER) prev_non_splash_screen = screen;
+    if (screen != SCREEN_SPLASH && screen != SCREEN_WEATHER && screen != SCREEN_STOCKS)
+        prev_non_splash_screen = screen;
     current_screen = screen;
     apply_battery_visibility();
     apply_corner_badge();

@@ -48,3 +48,23 @@ clock = off
 #   off             = no weather (default)
 #   LAT,LON         = e.g. 25.03,121.56 for Taipei
 weather = off
+# Your own holdings on the device, Taiwan tickers only. Turn the device a
+# quarter turn the other way to show them (the same gesture as weather, the
+# opposite direction).
+#
+# Source is the Taiwan Stock Exchange's own quote endpoint: no account, no key,
+# and it covers listed stocks, ETFs and the OTC board alike. Quotes are marked
+# "at last close" outside 09:00-13:30 on weekdays, because for most of any day
+# the number is not live and an unlabelled price would be a quiet lie.
+#
+# At most four, which is what fits one BLE write alongside everything else
+# (measured: 204 bytes against a 253-byte ceiling) and what stays readable at a
+# glance. Anything that is not a plain ticker number is ignored.
+#
+# These are YOUR positions. They stay in this file on your own machine — the
+# device shows them, nothing uploads them, and the examples below are just two
+# well-known tickers, not a suggestion.
+#
+#   off                 = no quotes (default)
+#   2330,2412           = comma separated, in the order you want them shown
+stocks = off

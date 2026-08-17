@@ -30,6 +30,18 @@ struct UsageData {
     // rather than against sunset.
     float moon_phase;        // 0..1 (0 new, .25 first quarter, .5 full); <0 = absent
     bool  moon_up;           // moon is above the horizon right now
+    // Quotes, as the daemon's compact "k" string:
+    //   "2317,255,-1.7|0050,106.45,+0.0"   ticker,last,percent — pipe separated
+    // Kept as a string rather than parsed into a struct because the device only
+    // ever prints it; splitting it here would mean fixing a maximum count in
+    // two places instead of one. Empty means no quotes were sent.
+    //
+    // 96 bytes covers the daemon's cap of four tickers at their widest
+    // (a six-digit code, a four-figure price and a two-digit move is 19 chars,
+    // so four of those plus separators is 79). The whole payload was measured
+    // at 204 bytes against a 253-byte MTU ceiling.
+    char  stocks[96];
+    bool  stocks_open;       // the Taiwan market is trading right now
     bool ok;                 // data parse succeeded
     bool valid;              // false until first successful parse
 };
