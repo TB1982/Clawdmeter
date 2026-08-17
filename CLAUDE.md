@@ -35,6 +35,7 @@ Connects to a host daemon over BLE; daemon polls Anthropic API for usage data. T
 - PMU: **AXP2101** on same I2C bus (addr=0x34) — battery, USB VBUS, PWR button IRQ
 - IMU: **QMI8658** on same I2C bus (addr=0x6B) — accelerometer for auto-rotation
 - Buttons: GPIO 0 (left → Space/voice-mode), GPIO 18 (right → Shift+Tab/mode-toggle), AXP PKEY (middle → cycle screens; on splash → cycle animations)
+- Flash: **16 MB** (verified on hardware — `esptool flash_id` reports it), 8 MB embedded PSRAM. Uses `default_16MB.csv`. **Every env must declare its own `board_upload.flash_size` / `board_upload.maximum_size` / `board_build.partitions`**, because `board = esp32-s3-devkitc-1` declares 8 MB and that is what an env inherits by saying nothing. This env said nothing until 2026-08-17, so it built against the 8 MB layout: app0 capped at 3.34 MB (84.8% full) and the upper 8 MB described by no partition at all. Same binary, correct table: 43.2%.
 
 ### AMOLED-1.8 (newer port)
 **Two hardware revisions ship under this name; the firmware probes I2C at boot and picks drivers automatically (`board_rev()`):**
