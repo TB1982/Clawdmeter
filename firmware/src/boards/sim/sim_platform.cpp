@@ -20,7 +20,15 @@ static bool take(bool* f) { bool v = *f; *f = false; return v; }
 bool sim_take_pwr_pressed(void)  { return take(&edge_pressed); }
 bool sim_take_pwr_long(void)     { return take(&edge_long); }
 bool sim_take_pwr_released(void) { return take(&edge_released); }
+static int rotation = 0;   // 0..3 quarter turns, cycled with the r key
+
 int  sim_battery_pct(void) { return battery; }
+// Quarter turns, same 0..3 the QMI8658 boards report. The sim fakes the
+// sensor, not the panel: the SDL window does not physically turn, so what this
+// exercises is everything downstream of the reading — the view selector in
+// main.cpp — which is the part with logic in it. Rotating the pixels is the
+// hardware board's own job and is tested there.
+int  sim_rotation_quadrant(void) { return rotation; }
 bool sim_charging(void)    { return charging; }
 bool sim_should_quit(void) { return quit; }
 
@@ -36,6 +44,7 @@ static void key_down(SDL_Keycode k) {
     case SDLK_d:      sim_playback_toggle_link(); break;
     case SDLK_s:      sim_display_screenshot(NULL); break;
     case SDLK_c:      charging = !charging; break;
+    case SDLK_r:      rotation = (rotation + 1) % 4; break;
     case SDLK_MINUS:  battery = battery < 5 ? 0 : battery - 5; break;
     case SDLK_EQUALS: battery = battery > 95 ? 100 : battery + 5; break;
     case SDLK_p:

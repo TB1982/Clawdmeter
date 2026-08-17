@@ -2,6 +2,7 @@
 #include "splash.h"
 #include <lvgl.h>
 #include <time.h>
+#include <math.h>       // lroundf — Arduino.h pulls this in, the sim's shim does not
 #include "logo.h"
 #include "clawd_still.h"
 #include "icons.h"
@@ -57,6 +58,12 @@ struct Layout {
     int16_t pair_y1, pair_y2, pair_y3;
     int16_t idle_px;                 // sleeping-creature size on the idle screen
 
+    // Weather screen
+    int16_t weather_cond_dy;         // condition line, offset below the big number
+    int16_t weather_deg_px;          // degree ring diameter
+    int16_t weather_deg_bw;          // degree ring stroke
+    int16_t weather_deg_dy;          // degree ring, offset down from the number's top
+
     // Bluetooth screen
     int16_t bt_info_panel_h;
     int16_t bt_reset_zone_h;
@@ -102,6 +109,10 @@ static void compute_layout(const BoardCaps& c) {
     L.pair_y2 = 120;
     L.pair_y3 = 160;
     L.idle_px = 160;
+    L.weather_cond_dy = 60;
+    L.weather_deg_px = 16;
+    L.weather_deg_bw = 4;
+    L.weather_deg_dy = 10;
 
     if (c.height >= 460) {
         // Large layout — tuned for 480x480 (AMOLED-2.16).
@@ -166,6 +177,10 @@ static void compute_layout(const BoardCaps& c) {
         L.pair_y2 = 56;
         L.pair_y3 = 80;
         L.idle_px = 96;
+        L.weather_cond_dy = 34;
+        L.weather_deg_px = 9;
+        L.weather_deg_bw = 2;
+        L.weather_deg_dy = 5;
         L.bt_info_panel_h = 90;
         L.bt_reset_zone_h = 60;
         L.bt_title_font    = &font_tiempos_34;
@@ -231,6 +246,10 @@ static lv_image_dsc_t battery_dscs[5];  // empty, low, medium, full, charging
 // connected but no usage update landed within DATA_FRESH_MS, the pairing hint
 // when BLE is down. Re-evaluated every loop in ui_tick_anim().
 static lv_obj_t* idle_group;            // the "Zzz" idle screen
+static lv_obj_t* weather_container = nullptr;   // the quarter-turn weather view
+static lv_obj_t* lbl_weather_temp = nullptr;
+static lv_obj_t* lbl_weather_cond = nullptr;
+static lv_obj_t* weather_deg     = nullptr;   // the ° ring, drawn not typed
 static uint32_t  last_data_ms = 0;      // lv_tick when the last valid usage update landed
 static bool      data_received = false; // any valid update since boot
 static bool      data_ok = true;        // last payload's ok flag; a {"ok":false} beat = "no fresh data"
@@ -492,6 +511,114 @@ static void build_idle_group(lv_obj_t* parent) {
     lv_obj_add_flag(idle_group, LV_OBJ_FLAG_HIDDEN);  // update_view_state decides
 }
 
+// ======== Weather screen ========
+//
+// Reached by turning the device a quarter turn, so it is built to be read at a
+// glance and from an angle: one number, one phrase, nothing to interpret.
+//
+// The daemon sends a raw WMO code rather than a category, so the naming happens
+// here. The table is deliberately coarse — "Rain" covers WMO 61/63/65 and the
+// showers, because a device you glance at sideways has no use for the
+// difference between moderate and heavy rain, and the fine-grained names would
+// not fit the panel anyway.
+static const char* wmo_phrase(int code) {
+    switch (code) {
+    case 0:                     return "Clear";
+    case 1:                     return "Mostly clear";
+    case 2:                     return "Partly cloudy";
+    case 3:                     return "Overcast";
+    case 45: case 48:           return "Fog";
+    case 51: case 53: case 55:
+    case 56: case 57:           return "Drizzle";
+    case 61: case 63: case 65:
+    case 66: case 67:
+    case 80: case 81: case 82:  return "Rain";
+    case 71: case 73: case 75:
+    case 77: case 85: case 86:  return "Snow";
+    case 95: case 96: case 99:  return "Thunderstorm";
+    default:                    return "";
+    }
+}
+
+static void init_weather_screen(lv_obj_t* scr) {
+    weather_container = lv_obj_create(scr);
+    lv_obj_set_size(weather_container, L.scr_w, L.scr_h);
+    lv_obj_set_pos(weather_container, 0, 0);
+    lv_obj_set_style_bg_opa(weather_container, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(weather_container, 0, 0);
+    lv_obj_set_style_pad_all(weather_container, 0, 0);
+    lv_obj_clear_flag(weather_container, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(weather_container, global_click_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t* t = lv_label_create(weather_container);
+    lv_label_set_text(t, "Weather");
+    lv_obj_set_style_text_font(t, L.title_font, 0);
+    lv_obj_set_style_text_color(t, COL_TEXT, 0);
+    lv_obj_align(t, LV_ALIGN_TOP_MID, L.title_nudge, L.title_y);
+
+    lbl_weather_temp = lv_label_create(weather_container);
+    lv_label_set_text(lbl_weather_temp, "--");
+    lv_obj_set_style_text_font(lbl_weather_temp, L.ent_pct_font, 0);
+    lv_obj_set_style_text_color(lbl_weather_temp, COL_TEXT, 0);
+    lv_obj_align(lbl_weather_temp, LV_ALIGN_CENTER, 0, -10);
+
+    // The degree sign is drawn, not typed. Every font in this project is an
+    // LVGL subset covering ASCII 32..126, so U+00B0 renders as a missing-glyph
+    // box — and regenerating a font means the whole lv_font_conv patch dance in
+    // CLAUDE.md for one character. A bordered circle is the same shape, scales
+    // with the layout, and costs no flash.
+    weather_deg = lv_obj_create(weather_container);
+    lv_obj_set_size(weather_deg, L.weather_deg_px, L.weather_deg_px);
+    lv_obj_set_style_radius(weather_deg, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(weather_deg, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(weather_deg, L.weather_deg_bw, 0);
+    lv_obj_set_style_border_color(weather_deg, COL_TEXT, 0);
+    lv_obj_set_style_pad_all(weather_deg, 0, 0);
+    lv_obj_clear_flag(weather_deg, LV_OBJ_FLAG_SCROLLABLE);
+
+    lbl_weather_cond = lv_label_create(weather_container);
+    lv_label_set_text(lbl_weather_cond, "");
+    lv_obj_set_style_text_font(lbl_weather_cond, L.reset_font, 0);
+    lv_obj_set_style_text_color(lbl_weather_cond, COL_DIM, 0);
+    lv_obj_align(lbl_weather_cond, LV_ALIGN_CENTER, 0, L.weather_cond_dy);
+
+    lv_obj_add_flag(weather_container, LV_OBJ_FLAG_HIDDEN);
+}
+
+// Refresh the two labels. Called from ui_update() on every payload.
+//
+// No weather in the payload is a different state from 0 degrees and clear, and
+// it has to look different: the daemon's `weather` setting is off, or it is an
+// older daemon, and saying so beats showing a plausible reading nobody asked
+// for. Same rule as the idle screen — never render an absence as a number.
+static void update_weather(const UsageData* d) {
+    if (!lbl_weather_temp) return;
+    // The absent-weather line is kept short on purpose. At reset_font it is the
+    // widest thing on the screen, and the fuller wording ran edge to edge on a
+    // 480px panel whose corners are rounded — the project's 20px margin exists
+    // for exactly that. It says what is missing, not where to fix it: the only
+    // person who can fix it is the one running the daemon.
+    if (!d || d->weather_code < 0) {
+        lv_label_set_text(lbl_weather_temp, "--");
+        lv_label_set_text(lbl_weather_cond, "no location set");
+        if (weather_deg) lv_obj_add_flag(weather_deg, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%d", (int)lroundf(d->weather_temp));
+    lv_label_set_text(lbl_weather_temp, buf);
+    lv_label_set_text(lbl_weather_cond, wmo_phrase(d->weather_code));
+    if (weather_deg) {
+        // Re-aligned on every update, not once at build: the label is centred,
+        // so its box moves whenever the number changes width — 9 to 10 degrees
+        // would leave the ring floating in the wrong place otherwise.
+        lv_obj_clear_flag(weather_deg, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_update_layout(lbl_weather_temp);
+        lv_obj_align_to(weather_deg, lbl_weather_temp,
+                        LV_ALIGN_OUT_RIGHT_TOP, L.weather_deg_bw, L.weather_deg_dy);
+    }
+}
+
 static void init_usage_screen(lv_obj_t* scr) {
     usage_container = lv_obj_create(scr);
     lv_obj_set_size(usage_container, L.scr_w, L.scr_h);
@@ -582,6 +709,7 @@ void ui_init(void) {
     init_battery_icons();
 
     init_usage_screen(scr);
+    init_weather_screen(scr);
     splash_init(scr);
 
     if (splash_get_root()) {
@@ -634,6 +762,12 @@ void ui_update(const UsageData* data) {
     if (!data->ok) return;          // a {"ok":false} "no data" beat → fall through to idle, keep last numbers
     last_data_ms = lv_tick_get();   // a real usage update just landed
     data_received = true;
+
+    // Weather rides along on the usage payload, so it refreshes on the same
+    // beat. Updated whether or not the weather screen is currently visible —
+    // turning the device must not be the thing that fetches the data, or the
+    // first second after the turn would show the previous reading.
+    update_weather(data);
 
     if (data->clock_epoch > 0) {    // daemon supplied wall-clock time → drive the title clock
         clock_base_epoch = data->clock_epoch;
@@ -830,11 +964,15 @@ static void global_click_cb(lv_event_t* e) {
 
 void ui_show_screen(screen_t screen) {
     lv_obj_add_flag(usage_container, LV_OBJ_FLAG_HIDDEN);
+    if (weather_container) lv_obj_add_flag(weather_container, LV_OBJ_FLAG_HIDDEN);
     splash_hide();
 
     switch (screen) {
     case SCREEN_SPLASH:  splash_show(); break;
     case SCREEN_USAGE:   lv_obj_clear_flag(usage_container, LV_OBJ_FLAG_HIDDEN); break;
+    case SCREEN_WEATHER:
+        if (weather_container) lv_obj_clear_flag(weather_container, LV_OBJ_FLAG_HIDDEN);
+        break;
     default: break;
     }
 

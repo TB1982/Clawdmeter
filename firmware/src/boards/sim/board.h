@@ -13,6 +13,7 @@
 //   n (hold)             SECONDARY button (HID Shift+Tab on hardware)
 //   p                    PWR button (short press; hold ~3s + release = pair)
 //   c                    toggle charging       - / =   battery down / up 5%
+//   r                    turn a quarter turn (0-3) — selects the weather view
 //   s                    save screenshot BMP to the current directory
 //   esc / window close   quit
 //

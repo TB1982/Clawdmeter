@@ -119,6 +119,10 @@ static bool parse_json(const char* json, UsageData* out) {
     strlcpy(out->reset_date, doc["rd"] | "", sizeof(out->reset_date));
     out->clock_epoch = doc["t"] | 0L;
     out->clock_fmt = doc["tf"] | 24;
+    // Absent (weather off, or an older daemon) → -1, which every reader treats
+    // as "no weather" rather than as clear skies at 0 degrees.
+    out->weather_code = doc["wx"] | -1;
+    out->weather_temp = doc["wt"] | 0.0f;
     out->ok = doc["ok"] | false;
     out->valid = true;
     return true;
@@ -184,6 +188,15 @@ static void check_serial_cmd() {
             // rate from here.
             else if (strcmp(cmd_buf, "next") == 0) {
                 if (ui_get_current_screen() == SCREEN_SPLASH) splash_next();
+            }
+            // The weather view is normally reached by physically turning the
+            // board, which neither `screenshot` nor the simulator can do — the
+            // sim's imu_hal_rotation_quadrant() is a hardcoded 0. Same reason
+            // `party` exists: a state that otherwise needs a physical act, on
+            // demand. Toggles, so a second `weather` puts back the last view.
+            else if (strcmp(cmd_buf, "weather") == 0) {
+                if (ui_get_current_screen() == SCREEN_WEATHER) ui_show_screen(SCREEN_USAGE);
+                else                                            ui_show_screen(SCREEN_WEATHER);
             }
             cmd_pos = 0;
         } else if (cmd_pos < CMD_BUF_SIZE - 1) {
@@ -347,6 +360,37 @@ void loop() {
                     else                          ble_keyboard_release();
                 }
                 secondary_was = secondary_now;
+            }
+        }
+
+        // ---- Orientation as a view selector ----
+        //
+        // Turning the device a quarter turn shows the weather; turning it back
+        // returns to whatever was on screen before. Upright and upside-down are
+        // left alone, so everything the device did before this existed still
+        // works exactly as it did — the gesture adds a view, it does not take
+        // the button's job.
+        //
+        // Gated on has_rotation rather than on a board macro: five of the six
+        // boards return 0 from imu_hal_rotation_quadrant() forever, and a
+        // screen you can never reach is worse than no screen. imu.cpp already
+        // debounces (300 ms stable, ~30 deg threshold) and reports face-up and
+        // face-down as "no change", so laying the device flat holds the view
+        // instead of flipping it.
+        if (board_caps().has_rotation) {
+            static uint8_t   last_quadrant = 0;
+            static screen_t  before_turn   = SCREEN_USAGE;
+            uint8_t q = imu_hal_rotation_quadrant();
+            if (q != last_quadrant) {
+                bool was_sideways = (last_quadrant == 1 || last_quadrant == 3);
+                bool is_sideways  = (q == 1 || q == 3);
+                if (is_sideways && !was_sideways) {
+                    before_turn = ui_get_current_screen();
+                    ui_show_screen(SCREEN_WEATHER);
+                } else if (!is_sideways && was_sideways) {
+                    ui_show_screen(before_turn);
+                }
+                last_quadrant = q;
             }
         }
 
