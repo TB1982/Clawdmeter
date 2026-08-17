@@ -24,6 +24,12 @@ struct UsageData {
     // enough to change the animation" stays a device decision.
     int   weather_code;      // WMO weather code; -1 = no weather in this payload
     float weather_temp;      // degrees C; meaningless unless weather_code >= 0
+    // Moon, from the same Open-Meteo call. moon_up is not "is it dark": the
+    // moon spends much of most nights below the horizon, and plenty of days
+    // above it, so the daemon compares the clock against moonrise/moonset
+    // rather than against sunset.
+    float moon_phase;        // 0..1 (0 new, .25 first quarter, .5 full); <0 = absent
+    bool  moon_up;           // moon is above the horizon right now
     bool ok;                 // data parse succeeded
     bool valid;              // false until first successful parse
 };

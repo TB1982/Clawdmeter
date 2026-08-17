@@ -56,3 +56,6 @@ typedef struct splash_mini splash_mini_t;
 splash_mini_t* splash_mini_create(lv_obj_t *parent, const char *anim_name, int px);
 lv_obj_t*      splash_mini_canvas(splash_mini_t *m);
 void           splash_mini_tick(splash_mini_t *m);
+// Show one frame and hold it. Do not also call splash_mini_tick() on the same
+// instance — an indicator that animates is an indicator that lies.
+void           splash_mini_set_frame(splash_mini_t *m, uint16_t frame);

@@ -502,6 +502,19 @@ lv_obj_t* splash_mini_canvas(splash_mini_t *m) {
     return m ? m->canvas : NULL;
 }
 
+// Pin one frame and stop advancing. For a mini that is an indicator rather
+// than a creature: the moon on the weather screen is frame N of an eight-frame
+// set, chosen by the phase, and it must sit still. splash_mini_tick() is simply
+// not called on a pinned instance, so nothing here has to learn a paused state.
+void splash_mini_set_frame(splash_mini_t *m, uint16_t frame) {
+    if (!m || !m->anim || m->anim->frame_count == 0) return;
+    uint16_t f = frame % m->anim->frame_count;
+    if (f == m->frame && m->buf) return;      // already showing it
+    m->frame = f;
+    m->started_ms = millis();
+    mini_render(m);
+}
+
 void splash_mini_tick(splash_mini_t *m) {
     if (!m || !m->buf || !m->anim || m->anim->frame_count == 0) return;
 

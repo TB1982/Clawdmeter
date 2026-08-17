@@ -143,8 +143,10 @@ fetch_weather_fragment() {
 
     local lat="${loc%%,*}" lon="${loc##*,}"
     local body
+    # moon_phase / moonrise / moonset ride on the same request — Open-Meteo
+    # returns them from the one call, so the moon costs no extra traffic.
     body=$(curl -s --max-time 8 \
-        "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code" \
+        "https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code&daily=moon_phase,moonrise,moonset&timezone=auto&forecast_days=1" \
         2>/dev/null) || return 0
     [ -z "$body" ] && return 0
 
@@ -159,6 +161,37 @@ fetch_weather_fragment() {
     [ -z "$code" ] || [ -z "$temp" ] && return 0
 
     local frag=",\"wx\":${code},\"wt\":${temp}"
+
+    # Moon, appended only if the whole set parses. Two separate facts:
+    #
+    #   mp  phase 0..1  (0 new, 0.25 first quarter, 0.5 full, 0.75 last)
+    #   mu  1 when the moon is above the horizon right now
+    #
+    # `mu` is not "is it dark". Tonight in Taipei the moon rises at 09:39 and
+    # sets at 21:10, so from 21:10 until tomorrow's moonrise the sky is dark and
+    # there is no moon in it — an icon shown on darkness alone would be wrong
+    # for most of the night. The two timestamps are in the request already, so
+    # getting this right costs a comparison.
+    local phase rise set
+    phase=$(echo "$body" | grep -o '"moon_phase":\[[0-9.]*'  | head -1 | sed 's/.*\[//')
+    rise=$( echo "$body" | grep -o '"moonrise":\["[^"]*"'    | head -1 | sed 's/.*\["//;s/"$//')
+    set=$(  echo "$body" | grep -o '"moonset":\["[^"]*"'     | head -1 | sed 's/.*\["//;s/"$//')
+    if [ -n "$phase" ] && [ -n "$rise" ] && [ -n "$set" ]; then
+        # Compare as HHMM integers in the location's own local time, which is
+        # what timezone=auto made these. Crossing midnight is the normal case:
+        # when moonset is earlier in the day than moonrise the moon is up from
+        # rise through midnight to set, so the test inverts.
+        local now_hm rise_hm set_hm up
+        now_hm=$(date +%H%M); now_hm=$((10#$now_hm))
+        rise_hm=$(echo "$rise" | cut -dT -f2 | tr -d ':'); rise_hm=$((10#$rise_hm))
+        set_hm=$( echo "$set"  | cut -dT -f2 | tr -d ':'); set_hm=$((10#$set_hm))
+        if [ "$rise_hm" -le "$set_hm" ]; then
+            up=$([ "$now_hm" -ge "$rise_hm" ] && [ "$now_hm" -lt "$set_hm" ] && echo 1 || echo 0)
+        else
+            up=$([ "$now_hm" -ge "$rise_hm" ] || [ "$now_hm" -lt "$set_hm" ] && echo 1 || echo 0)
+        fi
+        frag="${frag},\"mp\":${phase},\"mu\":${up}"
+    fi
     mkdir -p "$(dirname "$WEATHER_CACHE_FILE")" 2>/dev/null
     printf '%s\n%s\n' "$now" "$frag" > "$WEATHER_CACHE_FILE" 2>/dev/null
     echo "$frag"

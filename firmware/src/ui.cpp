@@ -250,6 +250,7 @@ static lv_obj_t* weather_container = nullptr;   // the quarter-turn weather view
 static lv_obj_t* lbl_weather_temp = nullptr;
 static lv_obj_t* lbl_weather_cond = nullptr;
 static lv_obj_t* weather_deg     = nullptr;   // the ° ring, drawn not typed
+static splash_mini_t* moon_icon  = nullptr;   // 'moon phases', one frame pinned
 static uint32_t  last_data_ms = 0;      // lv_tick when the last valid usage update landed
 static bool      data_received = false; // any valid update since boot
 static bool      data_ok = true;        // last payload's ok flag; a {"ok":false} beat = "no fresh data"
@@ -582,7 +583,29 @@ static void init_weather_screen(lv_obj_t* scr) {
     lv_obj_set_style_text_color(lbl_weather_cond, COL_DIM, 0);
     lv_obj_align(lbl_weather_cond, LV_ALIGN_CENTER, 0, L.weather_cond_dy);
 
+    // The moon sits in the same top-left slot the logo and the corner creature
+    // share, so it needs no geometry of its own and lines up with the battery
+    // opposite. splash_mini renders a grid animation into a small canvas; this
+    // one is never ticked, only pinned — see splash_mini_set_frame().
+    //
+    // It is a child of weather_container rather than of the screen, so it is
+    // hidden with the view and cannot appear over the usage numbers.
+    moon_icon = splash_mini_create(weather_container, "moon phases",
+                                   L.small_icons ? LOGO_SMALL_WIDTH : LOGO_WIDTH);
+    if (lv_obj_t* mc = splash_mini_canvas(moon_icon)) {
+        lv_obj_set_pos(mc, L.margin, L.logo_y);
+        lv_obj_add_flag(mc, LV_OBJ_FLAG_HIDDEN);   // update_weather() decides
+    }
+
     lv_obj_add_flag(weather_container, LV_OBJ_FLAG_HIDDEN);
+}
+
+// Phase fraction to one of the eight drawn frames. Eight buckets of 0.125, so
+// rounding lands each fraction on the nearest named phase and 0.94 wraps back
+// to new rather than off the end of the set.
+static uint16_t moon_frame_for(float phase) {
+    int f = (int)lroundf(phase * 8.0f);
+    return (uint16_t)((f % 8 + 8) % 8);
 }
 
 // Refresh the two labels. Called from ui_update() on every payload.
@@ -602,6 +625,7 @@ static void update_weather(const UsageData* d) {
         lv_label_set_text(lbl_weather_temp, "--");
         lv_label_set_text(lbl_weather_cond, "no location set");
         if (weather_deg) lv_obj_add_flag(weather_deg, LV_OBJ_FLAG_HIDDEN);
+        if (lv_obj_t* mc = splash_mini_canvas(moon_icon)) lv_obj_add_flag(mc, LV_OBJ_FLAG_HIDDEN);
         return;
     }
     char buf[16];
@@ -616,6 +640,19 @@ static void update_weather(const UsageData* d) {
         lv_obj_update_layout(lbl_weather_temp);
         lv_obj_align_to(weather_deg, lbl_weather_temp,
                         LV_ALIGN_OUT_RIGHT_TOP, L.weather_deg_bw, L.weather_deg_dy);
+    }
+
+    // Shown only while the moon is actually above the horizon, which the daemon
+    // works out from moonrise/moonset. Not "is it night": on most nights the
+    // moon is below the horizon for a good part of it, and a moon drawn then
+    // would be a picture of something that is not there.
+    if (lv_obj_t* mc = splash_mini_canvas(moon_icon)) {
+        if (d->moon_up && d->moon_phase >= 0.0f) {
+            splash_mini_set_frame(moon_icon, moon_frame_for(d->moon_phase));
+            lv_obj_clear_flag(mc, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(mc, LV_OBJ_FLAG_HIDDEN);
+        }
     }
 }
 
@@ -944,6 +981,15 @@ static void apply_battery_visibility(void) {
 // so it's called from ui_show_screen() and update_view_state() alike.
 static void apply_corner_badge(void) {
     lv_obj_t* badge = splash_mini_canvas(header_creature);
+    // The weather screen puts the moon in this slot, and both the logo and the
+    // creature live on the screen root rather than inside a view container, so
+    // without this they would simply draw on top of it. Clawd is still on the
+    // splash and the usage screen; here the sky gets the corner.
+    if (current_screen == SCREEN_WEATHER) {
+        if (logo_img) lv_obj_add_flag(logo_img, LV_OBJ_FLAG_HIDDEN);
+        if (badge)    lv_obj_add_flag(badge, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
     bool live = (current_screen != SCREEN_SPLASH) && (view_state == 2) && badge;
 
     if (logo_img) {

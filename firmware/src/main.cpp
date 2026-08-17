@@ -111,7 +111,15 @@ static bool parse_json(const char* json, UsageData* out) {
     out->weekly_pct = doc["w"] | 0.0f;
     out->weekly_reset_mins = doc["wr"] | -1;
     strlcpy(out->status, doc["st"] | "unknown", sizeof(out->status));
-    out->chime = doc["c"] | false;   // absent (old daemon / chime off) → stay silent
+    // Read as an integer, not as a bool. ArduinoJson's `|` falls back to the
+    // default whenever is<T>() is false, and is<bool>() is true only for a JSON
+    // literal true/false — a numeric 1 is not one. The daemon sends `"c":1`, so
+    // `doc["c"] | false` was silently false for every payload ever sent, and the
+    // opt-in chime never sounded. It went unnoticed because the `buzz` serial
+    // command deliberately bypasses this flag, so what got verified on hardware
+    // was the audio path, never the switch. Reading as int accepts both 1 and
+    // true, so no daemon version has to change.
+    out->chime = (doc["c"] | 0) != 0;   // absent (old daemon / chime off) → stay silent
     const char* acct = doc["acct"] | "pro";
     out->enterprise = (strcmp(acct, "ent") == 0);
     out->time_pct = doc["tp"] | 0;
@@ -123,6 +131,8 @@ static bool parse_json(const char* json, UsageData* out) {
     // as "no weather" rather than as clear skies at 0 degrees.
     out->weather_code = doc["wx"] | -1;
     out->weather_temp = doc["wt"] | 0.0f;
+    out->moon_phase   = doc["mp"] | -1.0f;
+    out->moon_up      = (doc["mu"] | 0) != 0;   // int, not bool — see the chime note above
     out->ok = doc["ok"] | false;
     out->valid = true;
     return true;
