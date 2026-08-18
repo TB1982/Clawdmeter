@@ -778,7 +778,7 @@ static const char* wmo_phrase(int code) {
 static const struct { wx_group_t group; const char* anim; } WEATHER_ANIMS[] = {
     { WX_CLEAR,          "sunny"      },   // Nova's, straw hat
     { WX_PARTLY_CLOUDY,  "cloud"      },   // Anthropic's official cloud ride
-    { WX_RAIN,           "rainy days" },   // Nova's, leaf umbrella
+    { WX_RAIN,           "rainy"      },   // Nova's leaf, computed rain
 };
 
 static const char* weather_anim_name(int code) {

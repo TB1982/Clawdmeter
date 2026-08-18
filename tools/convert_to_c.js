@@ -131,6 +131,12 @@ const EXCLUDE = new Set([
   // reads. The JSON and tools/make_coin_rain.js stay, so it remains an editor
   // sample and can be brought back full-screen by deleting this line.
   'coin rain',
+
+  // The still base for 'rainy': Nova's leaf and blink, with no weather on it.
+  // make_rain_anim.js reads it from tools/drawn_anims/, so it stays an editor
+  // sample and stays redrawable, but nothing on the device asks for a rainy
+  // scene with the rain left out.
+  'rain',
 ]);
 
 function safeIdent(s) {

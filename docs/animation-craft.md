@@ -268,6 +268,41 @@ all 17 at 60, and lands the same 96 px at 40. The empty rows under his feet were
 not spare room to reclaim; they were the reason he looked like he was standing
 somewhere. *(2026-08-12)*
 
+### Which rules here scale with the grid, and which do not
+
+Three kinds, and reading one as another is how "never three drops on a row"
+turned rain into graph paper at 60 cells.
+
+**A fraction of the width.** "Never three anywhere" was written on a 20-wide
+grid, where three drops span 15% of the row and read as a drawn line. At 60 they
+span 5% and read as nothing. Worse, held as a literal three it caps the whole
+animation at 2 per row × 60 rows = **3.3% of the grid — below the 3.5% density
+of the drawing it was measured from.** The rule forbids its own source. Carried
+across as the fraction it was, 2 in 20 becomes 6 in 60 and it means what it
+meant.
+
+**A size on the panel.** "A 3×3 heart is not legible" is about screen pixels,
+not cells: at 24 px/cell that heart is 72 px across and at 8 px/cell it is 24.
+These scale with the grid, the same way `side/5` carries the floor margin.
+
+**A shape's own minimum.** "A flame is at least three cells wide at its base" is
+neither of the above. A taper needs three cells to be a taper in any grid; below
+that it is a stick, which is what 43% of the generated tongues were. These do
+not scale, and scaling them is how the sticks come back.
+
+The test is to ask what the number counts. Things across a width: scales. A
+size that lands on glass: scales. Cells inside one shape: does not.
+*(2026-08-18)*
+
+**Even spacing is the machine tell, on whichever axis you leave it.** The first
+rain built on the note above put a drop every 8 cells down each column — fall
+lines, as prescribed, and forty columns of them side by side is graph paper.
+"Strung-out" was doing work in that sentence that a lattice does not do: the
+drops trail one behind another at *unequal* distances. Spacing them by golden-
+ratio steps from a per-column start fixes it, and it is the same fix the columns
+themselves already had. Whatever irregularity you gave one axis, the other axis
+needs its own. *(2026-08-18)*
+
 ---
 
 ## Timing
