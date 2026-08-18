@@ -112,8 +112,19 @@ const PHI = 0.6180339887;  // for spreading drops inside a column
 const MAX_PER_ROW = Math.round(GRID / 20 * 2 / DROP);        // Nova's "never three", as a fraction of the row
 const MAX_PER_ROW_BEHIND = Math.round(GRID / 20 * 1 / DROP); // and her tighter one for the sheltered band
 
-// The three Nova mixed for "rainy days", in her proportions.
-const TIER_HEX = ['#5B93B0', '#99E6FF', '#E0F7FF'];   // far, mid, near
+// Nova's far and near from "rainy days", with the middle placed halfway
+// between them rather than taken from her file.
+//
+// Her three are 134, 210 and 241 in luminance: a gap of 76 to the middle and
+// only 31 above it. At 24 px a cell that separates; at the 5 px this renders
+// at, the top two are one colour and the rain reads as two layers. The middle
+// is the average of the outer two, which puts the three at 134 / 188 / 241 —
+// even steps, and derived from her colours rather than invented beside them.
+const mix = (a, b) => '#' + [0, 2, 4].map(i =>
+  Math.round((parseInt(a.slice(1 + i, 3 + i), 16) + parseInt(b.slice(1 + i, 3 + i), 16)) / 2)
+    .toString(16).padStart(2, '0')).join('');
+const FAR_HEX = '#5B93B0', NEAR_HEX = '#E0F7FF';
+const TIER_HEX = [FAR_HEX, mix(FAR_HEX, NEAR_HEX), NEAR_HEX];   // far, mid, near
 
 // ── args ────────────────────────────────────────────────────────────────────
 
@@ -312,14 +323,19 @@ const COLUMNS = [];
 for (let x = 0; x < GRID; x++) {
   const h = Math.sin(2 * Math.PI * x / P1) + Math.sin(2 * Math.PI * x / P2);
   if (x % DROP) continue;                        // blocks sit on a DROP-cell pitch
-  if (h < -0.55) continue;                       // this column stays dry
-  // How many drops are falling in this column, 1 to 3 (the far layer gets more More than it sounds like
-  // it should be: the shelter rule removes every drop that would land under the
-  // creature or his leaf, and the never-three pass removes more, so what is
-  // below). More than it sounds like: the shelter rule removes every drop that
-  // would land under the creature, and the never-three pass removes more, so
-  // what is placed and what is seen differ by about half.
-  const n = 1 + Math.round(((h + 0.55) / 2.55) * 2);
+  // Every column on the pitch rains; the wave decides how hard, not whether.
+  //
+  // The ratio Nova measured is of *cells* — 126 dim to 81 to 42 — and reading
+  // it as columns is what left the bright tier three columns wide in sixty.
+  // Three of anything cannot be spread evenly: however the tiers were assigned
+  // the near layer came out a third to one side, which is a small-number
+  // artefact rather than a distribution with a fix. Spreading the same cells
+  // over every available column instead puts a bright one every twelve cells.
+  //
+  // What is placed and what is seen differ by about half: the shelter removes
+  // every drop that would land under the creature, and the row limit removes
+  // more.
+  const n = 1 + (h > 0.6 ? 1 : 0);
   // Where they are. Golden-ratio steps from a per-column start, which spreads
   // them without ever settling into a spacing.
   //
@@ -334,35 +350,34 @@ for (let x = 0; x < GRID; x++) {
   COLUMNS.push({ x, offsets, tier: 0 });
 }
 
-// Brightness by rank rather than by threshold, on a fourth and fifth period.
+// Brightness on a fixed six-column cycle, three far to two mid to one near.
 //
-// Thresholds on the same wave that chose the column gave 16 near against 11
-// far — inverted, and inverted is the visible half of the mistake. The ratio is
-// the point: "rainy days" has 126 dim cells to 81 mid to 42 bright, so the
-// front layer is the rare one. Ranking guarantees that whatever the sines do;
-// ranking on *different* periods keeps the bright ones from bunching, which a
-// threshold on the same wave cannot avoid.
-{
-  const order = COLUMNS
-    .map(c => ({ c, t: Math.sin(2 * Math.PI * c.x / 17) + Math.sin(2 * Math.PI * c.x / 19) }))
-    .sort((a, b) => b.t - a.t);
-  const near = Math.round(order.length / 6);
-  const mid  = Math.round(order.length / 3);
-  order.forEach((o, i) => { o.c.tier = i < near ? 2 : i < near + mid ? 1 : 0; });
-  // The far layer carries more drops than the others. Partly because distance
-  // crowds — the same rain seen from further away puts more of itself in the
-  // same angle — and partly because it is the only layer that continues behind
-  // him, where the shelter and his own outline remove most of what is placed.
-  // At an equal count the band came out at one drop every other row against
-  // four to six in the open, which reads as no rain back there rather than as
-  // rain seen dimly.
-  for (const c of COLUMNS) if (c.tier === 0) {
-    const extra = [];
-    let f = ((Math.sin(2 * Math.PI * c.x / 23) + 1) / 2);
-    for (let k = 0; k < Math.ceil(c.offsets.length * 0.6); k++) { f = (f + PHI) % 1; extra.push(Math.floor(f * GRID / DROP) * DROP); }
-    c.offsets = c.offsets.concat(extra);
-  }
-}
+// Three attempts, each less structured than the last, and the lesson is that
+// less structure was the wrong axis to move along.
+//
+// Thresholds on the wave that chose the columns inverted the ratio. Ranking on
+// a second pair of sines put eight of the ten brightest columns in the left
+// half — periods 17 and 19 beat at 161 cells, longer than the 60 there are to
+// see, so the canvas gets half of one slow swell: a wave whose beat exceeds the
+// canvas is not irregular, it is a gradient. Stepping by phi removed the
+// gradient but not the lumpiness, because with four near columns in sixty any
+// arrangement is coarse — 172 cells left against 112 right, which is a
+// three-one split reading as a bias.
+//
+// A cycle fixes the ratio exactly and guarantees one near column per six
+// wherever you look. The shift by k/6 moves where in each six it lands, so the
+// cycle itself does not become the pattern. Evenness at the scale of a few
+// columns is what the eye is judging; over the whole canvas it was already even
+// and still looked wrong.
+const TIER_CYCLE = [0, 0, 1, 0, 1, 2];
+// Keyed to the column's position, not its index in this list. Indexing by
+// list position looked equivalent and is not: which columns rain is decided by
+// a wave, so they are not evenly spaced, and the fifth *raining* column can sit
+// anywhere. Position keeps a near column every twelve cells whatever rains.
+COLUMNS.forEach((c) => {
+  const k = Math.floor(c.x / DROP);
+  c.tier = TIER_CYCLE[(k + Math.floor(k / 6)) % 6];
+});
 
 // ── compose ─────────────────────────────────────────────────────────────────
 
@@ -452,9 +467,19 @@ for (let i = 0; i < FRAMES; i++) {
 
   // Beads last, so one is never overwritten by a drop passing the same cell.
   // Brightest tier on purpose: a bead sits on top of the leaf, in front of it.
+  // Drawn DROP x DROP from the outline downwards, so it straddles the edge and
+  // sits a cell into the shape. On the outline row alone every bead landed
+  // exactly on the leaf's silhouette, which reads as the rim being wet rather
+  // than as anything resting on the surface — as if the drop had clipped the
+  // edge and carried on past.
   for (const b of beads)
-    for (let dx = 0; dx < DROP; dx++)
-      if (b.x + dx < GRID) grid[b.y][b.x + dx] = TIER[2];
+    for (let dy = 0; dy < DROP; dy++)
+      for (let dx = 0; dx < DROP; dx++) {
+        const by = b.y + dy, bx = b.x + dx;
+        if (by >= GRID || bx >= GRID) continue;
+        if (!src[by][bx]) continue;          // only where there is something to sit on
+        grid[by][bx] = TIER[2];
+      }
 
   frames.push({ hold: FRAME_MS, grid });
 }
