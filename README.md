@@ -14,19 +14,21 @@ Shift+Tab over BLE HID for Claude Code's voice mode and mode-toggle shortcuts.
 
 The device boots into the splash. Tap the screen anywhere to switch to the Usage view; tap again to flip back to the splash.
 
-|              Splash               |              Usage              |
-| :-------------------------------: | :-----------------------------: |
-| ![Splash](screenshots/splash.gif) | ![Usage](screenshots/usage.png) |
-|   Splash; touch-toggle anytime    | Session and weekly utilization  |
+|                          Splash                           |                         Usage                          |
+| :-------------------------------------------------------: | :----------------------------------------------------: |
+| <img src="screenshots/splash.gif" width="380" height="380" alt="Splash"> | <img src="screenshots/usage.png" width="380" height="380" alt="Usage"> |
+|               Splash; touch-toggle anytime                | Session and weekly utilization                         |
 
 While the splash is up, the middle (PWR) button cycles animations. **Hold the power button for 3 seconds, then release, to put the device into pairing mode** — this clears the saved Bluetooth bond and re-advertises. The firmware also auto-rotates animations every 20 s within the current usage-rate group, so a long stretch on the splash isn't just one Clawd on loop.
 
 On a board with an IMU — the AMOLED-2.16 today — a quarter turn shows a third and fourth screen, and turning back restores the one you were on. Both stay dark until the daemon is told to fetch them; see [Turn the device](#turn-the-device).
 
-|              Weather               |              Stocks               |
-| :--------------------------------: | :-------------------------------: |
-| ![Weather](screenshots/weather.png) | ![Stocks](screenshots/stocks.png) |
-| Conditions and temperature, with the moon's phase in the corner — shown only while the moon is above the horizon | Your own tickers, red for up in the Taiwan convention, and a coin that keeps turning after the bell |
+|                          Weather                           |                         Stocks                          |
+| :--------------------------------------------------------: | :-----------------------------------------------------: |
+| <img src="screenshots/weather.png" width="380" height="380" alt="Weather"> | <img src="screenshots/stocks.png" width="380" height="380" alt="Stocks"> |
+|              Conditions, and the moon's phase              |          Your own tickers, and a coin           |
+
+The moon appears only while it is actually above the horizon, which is not the same thing as night. Quotes are red for up, the Taiwan convention and the opposite of the American one, and the coin keeps turning after the bell.
 
 ## What this fork adds
 
