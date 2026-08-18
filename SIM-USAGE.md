@@ -32,6 +32,7 @@ Launch from the `firmware/` directory — the default scenario path
 | `p` | PWR button (short press; hold ~3s + release = pair gesture) |
 | `c` | toggle charging |
 | `-` / `=` | battery down / up 5% |
+| `r` | turn a quarter turn (0–3) — selects the weather / stocks views |
 | `s` | save screenshot BMP to the current directory |
 | `esc` / window close | quit |
 
@@ -69,8 +70,36 @@ SDL_VIDEODRIVER=dummy SIM_AUTOSHOT_MS=6000 .pio/build/sim/program
 ```
 
 Saves `sim-autoshot.bmp` (override with `SIM_AUTOSHOT_PATH`) after the given
-delay and exits. Combine with `SIM_SCENARIO` pointing at a single-state file
-to capture any specific screen.
+delay and exits.
+
+### `SIM_SCRIPT` — drive it without a human at the window
+
+An autoshot alone only ever captures the boot screen. `SIM_SCRIPT` presses the
+keys and taps the screen for you, so no screen needs a temporary edit to
+`main.cpp` to be reachable — which is the edit that gets committed by accident.
+
+Comma-separated `ms:action[:arg]`, fired once the clock passes each `ms` (the
+order you write them in does not matter):
+
+| step | |
+|---|---|
+| `600:tap` / `600:tap:240,300` | tap the centre, or a point |
+| `1200:key:p` | press and release any key from the map above |
+| `1400:hold:p:1800` | hold a key (PWR long-press → the pair gesture) |
+| `2000:shot:out.bmp` | screenshot |
+| `2400:quit` | exit |
+
+### `./sim_shot.sh` — all of it in one line
+
+```bash
+./sim_shot.sh usage.png "1000:tap"                        # tap through to the usage screen
+./sim_shot.sh anim.png "600:key:p,800:key:p" --at 4000    # 3rd animation, 4 s in
+./sim_shot.sh weather.png "600:key:r"                     # a quarter turn
+```
+
+Builds, runs headless, appends the shot and quit steps, converts BMP → PNG.
+`--at <ms>` moves the shot, which is also how you pick *which frame* of an
+animation you capture.
 
 ## Caveat
 
