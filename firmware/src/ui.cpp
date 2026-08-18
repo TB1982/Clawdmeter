@@ -64,6 +64,10 @@ struct Layout {
     int16_t weather_deg_px;          // degree ring diameter
     int16_t weather_deg_bw;          // degree ring stroke
     int16_t weather_deg_dy;          // degree ring, offset down from the number's top
+    int16_t weather_anim_px;         // creature box, a multiple of the 60-cell grid
+    int16_t weather_anim_x;          // its inset from the left edge
+    int16_t weather_anim_dy;         // and its nudge off vertical centre
+    int16_t weather_text_dx;         // how far the reading moves right to make room
 
     // Stocks screen
     int16_t stock_row_h;             // vertical pitch between quote rows
@@ -117,6 +121,13 @@ static void compute_layout(const BoardCaps& c) {
     L.pair_y3 = 160;
     L.idle_px = 160;
     L.weather_cond_dy = 60;
+    // Clawd takes the left half, the reading takes the right. The animation box
+    // is a whole multiple of the 60-cell grid so no cell lands on a half pixel:
+    // 240 is 4 px per cell on a 480 panel.
+    L.weather_anim_px = 300;
+    L.weather_anim_x  = 6;
+    L.weather_anim_dy = 26;
+    L.weather_text_dx = 116;
     L.weather_deg_px = 16;
     L.weather_deg_bw = 4;
     L.weather_deg_dy = 10;
@@ -189,6 +200,10 @@ static void compute_layout(const BoardCaps& c) {
         L.pair_y3 = 80;
         L.idle_px = 96;
         L.weather_cond_dy = 34;
+        L.weather_anim_px = 180;
+        L.weather_anim_x  = 4;
+        L.weather_anim_dy = 6;
+        L.weather_text_dx = 78;
         L.weather_deg_px = 9;
         L.weather_deg_bw = 2;
         L.weather_deg_dy = 5;
@@ -262,6 +277,8 @@ static lv_image_dsc_t battery_dscs[5];  // empty, low, medium, full, charging
 // when BLE is down. Re-evaluated every loop in ui_tick_anim().
 static lv_obj_t* idle_group;            // the "Zzz" idle screen
 static lv_obj_t* weather_container = nullptr;   // the quarter-turn weather view
+static splash_mini_t* weather_creature = nullptr;
+static bool weather_animating = false;
 static lv_obj_t* lbl_weather_temp = nullptr;
 static lv_obj_t* lbl_weather_cond = nullptr;
 static lv_obj_t* weather_deg     = nullptr;   // the ° ring, drawn not typed
@@ -702,6 +719,31 @@ static void update_stocks(const UsageData* d) {
 // showers, because a device you glance at sideways has no use for the
 // difference between moderate and heavy rain, and the fine-grained names would
 // not fit the panel anyway.
+// The nine categories, once. wmo_phrase() and weather_anim_name() both switch
+// on this rather than on the raw code, so a code cannot end up labelled Rain
+// while it draws the drizzle creature.
+enum wx_group_t { WX_NONE, WX_CLEAR, WX_MOSTLY_CLEAR, WX_PARTLY_CLOUDY, WX_OVERCAST,
+                  WX_FOG, WX_DRIZZLE, WX_RAIN, WX_SNOW, WX_THUNDER };
+
+static wx_group_t wmo_group(int code) {
+    switch (code) {
+    case 0:                     return WX_CLEAR;
+    case 1:                     return WX_MOSTLY_CLEAR;
+    case 2:                     return WX_PARTLY_CLOUDY;
+    case 3:                     return WX_OVERCAST;
+    case 45: case 48:           return WX_FOG;
+    case 51: case 53: case 55:
+    case 56: case 57:           return WX_DRIZZLE;
+    case 61: case 63: case 65:
+    case 66: case 67:
+    case 80: case 81: case 82:  return WX_RAIN;
+    case 71: case 73: case 75:
+    case 77: case 85: case 86:  return WX_SNOW;
+    case 95: case 96: case 99:  return WX_THUNDER;
+    default:                    return WX_NONE;
+    }
+}
+
 static const char* wmo_phrase(int code) {
     switch (code) {
     case 0:                     return "Clear";
@@ -721,6 +763,30 @@ static const char* wmo_phrase(int code) {
     }
 }
 
+// Which creature stands next to which reading. A table rather than a switch so
+// tools/check_groups.js can read it: a name here that is not in the build would
+// otherwise fail silently — the screen would simply never show a creature, which
+// looks exactly like a category nobody has drawn yet.
+//
+// Most categories are still absent, and that is the intended state rather than a
+// gap to be filled with something. Standing in with a creature that means other
+// weather would be worse than an empty slot, because the whole point of the
+// picture is that it says what it is like outside. An absent one keeps the
+// temperature centred, which is where it sat before any of this existed.
+//
+// Filling one in is a line here plus a JSON in tools/drawn_anims/.
+static const struct { wx_group_t group; const char* anim; } WEATHER_ANIMS[] = {
+    { WX_CLEAR,          "sunny"      },   // Nova's, straw hat
+    { WX_PARTLY_CLOUDY,  "cloud"      },   // Anthropic's official cloud ride
+    { WX_RAIN,           "rainy"      },   // Nova's leaf, computed rain
+};
+
+static const char* weather_anim_name(int code) {
+    const wx_group_t g = wmo_group(code);
+    for (const auto& w : WEATHER_ANIMS) if (w.group == g) return w.anim;
+    return NULL;   // still to be drawn
+}
+
 static void init_weather_screen(lv_obj_t* scr) {
     weather_container = lv_obj_create(scr);
     lv_obj_set_size(weather_container, L.scr_w, L.scr_h);
@@ -736,6 +802,16 @@ static void init_weather_screen(lv_obj_t* scr) {
     lv_obj_set_style_text_font(t, L.title_font, 0);
     lv_obj_set_style_text_color(t, COL_TEXT, 0);
     lv_obj_align(t, LV_ALIGN_TOP_MID, L.title_nudge, L.title_y);
+
+    // Created for whatever the first condition turns out to be; the placeholder
+    // name only has to exist in the build, since update_weather() re-points it
+    // before anything is shown. If it fails — no animation compiled in — every
+    // use below is NULL-safe and the screen keeps its original centred layout.
+    weather_creature = splash_mini_create(weather_container, "sunny", L.weather_anim_px);
+    if (lv_obj_t* wc = splash_mini_canvas(weather_creature)) {
+        lv_obj_align(wc, LV_ALIGN_LEFT_MID, L.weather_anim_x, L.weather_anim_dy);
+        lv_obj_add_flag(wc, LV_OBJ_FLAG_HIDDEN);   // update_weather() decides
+    }
 
     lbl_weather_temp = lv_label_create(weather_container);
     lv_label_set_text(lbl_weather_temp, "--");
@@ -788,6 +864,19 @@ static uint16_t moon_frame_for(float phase) {
     return (uint16_t)((f % 8 + 8) % 8);
 }
 
+// Where the temperature and its condition sit. Centred when the screen is only
+// text, pushed right when a creature has the left half.
+//
+// It is a function rather than two branches inline because both the absent and
+// the present path need it, and because weather_deg aligns itself to the label
+// afterwards in both — a layout that moved in one path and not the other would
+// leave the degree ring behind exactly once, on the transition.
+static void place_weather_text(bool with_creature) {
+    const int dx = with_creature ? L.weather_text_dx : 0;
+    if (lbl_weather_temp) lv_obj_align(lbl_weather_temp, LV_ALIGN_CENTER, dx, -10);
+    if (lbl_weather_cond) lv_obj_align(lbl_weather_cond, LV_ALIGN_CENTER, dx, L.weather_cond_dy);
+}
+
 // Refresh the two labels. Called from ui_update() on every payload.
 //
 // No weather in the payload is a different state from 0 degrees and clear, and
@@ -806,8 +895,21 @@ static void update_weather(const UsageData* d) {
         lv_label_set_text(lbl_weather_cond, "no location set");
         if (weather_deg) lv_obj_add_flag(weather_deg, LV_OBJ_FLAG_HIDDEN);
         if (lv_obj_t* mc = splash_mini_canvas(moon_icon)) lv_obj_add_flag(mc, LV_OBJ_FLAG_HIDDEN);
+        place_weather_text(false);
+        if (lv_obj_t* wc = splash_mini_canvas(weather_creature)) lv_obj_add_flag(wc, LV_OBJ_FLAG_HIDDEN);
+        weather_animating = false;
         return;
     }
+    // The creature first: whether there is one decides where the text goes, and
+    // the text has to be placed before weather_deg aligns itself to it below.
+    const char* anim = weather_anim_name(d->weather_code);
+    weather_animating = anim && splash_mini_set_anim(weather_creature, anim);
+    if (lv_obj_t* wc = splash_mini_canvas(weather_creature)) {
+        if (weather_animating) lv_obj_clear_flag(wc, LV_OBJ_FLAG_HIDDEN);
+        else                   lv_obj_add_flag(wc, LV_OBJ_FLAG_HIDDEN);
+    }
+    place_weather_text(weather_animating);
+
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", (int)lroundf(d->weather_temp));
     lv_label_set_text(lbl_weather_temp, buf);
@@ -1091,6 +1193,13 @@ static void update_view_state(void) {
 }
 
 void ui_tick_anim(void) {
+    // The weather creature, when the current condition has one. The moon in the
+    // corner of the same screen is deliberately not ticked — it is an indicator,
+    // and an indicator that animates is an indicator that lies.
+    if (current_screen == SCREEN_WEATHER) {
+        if (weather_animating) splash_mini_tick(weather_creature);
+        return;
+    }
     // The stocks screen has its own moving part. Ticked before the early
     // return below, which exists to keep the usage screen's creatures from
     // burning redraws while something else is on show.
@@ -1196,10 +1305,21 @@ static void apply_corner_badge(void) {
     }
 }
 
+// SCREEN_COUNT means "held at home"; see ui_set_turned_view().
+static screen_t turned_view = SCREEN_COUNT;
+
+void ui_set_turned_view(screen_t screen) { turned_view = screen; }
+
 static void global_click_cb(lv_event_t* e) {
     (void)e;
-    if (current_screen == SCREEN_SPLASH) ui_show_screen(prev_non_splash_screen);
-    else                                  ui_show_screen(SCREEN_SPLASH);
+    if (current_screen != SCREEN_SPLASH) { ui_show_screen(SCREEN_SPLASH); return; }
+    // Where a tap on the splash goes: whatever the device's angle owns right
+    // now, and the usage view only when it is held at home. Asking the
+    // orientation rather than the history is what makes this reversible — the
+    // turned views are never recorded as "previous" on purpose, so a tap off
+    // one used to strand you on the usage view until the device was turned
+    // away and back.
+    ui_show_screen(turned_view != SCREEN_COUNT ? turned_view : prev_non_splash_screen);
 }
 
 void ui_show_screen(screen_t screen) {

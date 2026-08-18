@@ -59,3 +59,14 @@ void           splash_mini_tick(splash_mini_t *m);
 // Show one frame and hold it. Do not also call splash_mini_tick() on the same
 // instance — an indicator that animates is an indicator that lies.
 void           splash_mini_set_frame(splash_mini_t *m, uint16_t frame);
+// Point an existing instance at a different animation, keeping its canvas and
+// buffer. Returns false and changes nothing if the name is not in the build, so
+// the caller can use it as an existence test. NULL name is not accepted: a mini
+// created to follow the usage rate keeps doing that, and one created by name
+// stays by name — switching a mini between the two mid-life would mean two
+// different sets of fields being live and is not a thing anything needs.
+//
+// This is the same swap a rate-following mini already does to itself when the
+// group changes; mini_render() re-derives the cell size, so the new animation
+// may be a different grid than the buffer was first filled for.
+bool           splash_mini_set_anim(splash_mini_t *m, const char *anim_name);
