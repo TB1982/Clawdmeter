@@ -1,4 +1,4 @@
-# Splash animation tools
+# Asset tools
 
 Pipeline for getting 20×20 pixel animations — scraped or your own — onto the device.
 
@@ -18,27 +18,27 @@ that is the file to point them at instead.
 ## 1. Scrape
 
 ```bash
-node scrape_claudepix.js
+node convert_official_clawd.js
+node convert_official_clawd.js --verify /tmp/verify   # + per-animation PNGs
 ```
 
-Fetches the manifest from `claudepix.vercel.app/app.js`, then each animation's
-HTML file, evaluates the embedded JS in a Node VM context (loading the same
-`creature-engine.js` the site uses), and writes resolved frame data to
-`tools/claudepix_data/*.json`.
+Converts the official Anthropic Clawd animations archived in
+`research/clawd-official/` (GIFs decoded via ImageMagick, the Laptop and
+Soccer Lottie exports read directly) into a single
+`firmware/src/splash_animations.h`:
 
-Each output file looks like:
-```json
-{
-  "filename": "idle_breathe.html",
-  "name": "idle breathe",
-  "category": "Idle",
-  "description": "...",
-  "frame_count": 17,
-  "frames": [{ "hold": 500, "grid": [[0,0,...],[0,1,1,...],...] }, ...]
-}
-```
+- frames as bounding-box crops on the shared 55×37 art stage, one byte per
+  cell into a per-animation ≤16-color RGB565 palette (index 0 = background)
+- per-frame hold in ms, with consecutive duplicate frames collapsed
+- a detected loop region per animation (gait cycles, scene middles) that the
+  engine can hold or release for walk-to-target and timed scenes
+- the eyes — transparent holes in the source GIFs — inked as `#141413`
+- contrast recolors (trumpet notes → ivory, magnifier fedora → gray) and the
+  sailing-loop cross-match that defines the sailing scene's loop window
 
-Override URL or output dir with `--base` and `--out`.
+See `research/clawd-official/CLAUDE.md` for asset provenance and the format
+details, and `--in` / `--out` to override paths. Rebuild firmware after
+running.
 
 ## 2. Draw or fix animations (optional)
 
@@ -269,7 +269,7 @@ scrapes.
 ## 3. Convert to C
 
 ```bash
-node convert_to_c.js
+node png_to_lvgl.js input.png symbol_name [W_MACRO] [H_MACRO] [--tint=RRGGBB | --no-tint]
 ```
 
 Reads `tools/claudepix_data/*.json`, `tools/custom_anims/*.json` and
