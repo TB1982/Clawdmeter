@@ -1305,10 +1305,21 @@ static void apply_corner_badge(void) {
     }
 }
 
+// SCREEN_COUNT means "held at home"; see ui_set_turned_view().
+static screen_t turned_view = SCREEN_COUNT;
+
+void ui_set_turned_view(screen_t screen) { turned_view = screen; }
+
 static void global_click_cb(lv_event_t* e) {
     (void)e;
-    if (current_screen == SCREEN_SPLASH) ui_show_screen(prev_non_splash_screen);
-    else                                  ui_show_screen(SCREEN_SPLASH);
+    if (current_screen != SCREEN_SPLASH) { ui_show_screen(SCREEN_SPLASH); return; }
+    // Where a tap on the splash goes: whatever the device's angle owns right
+    // now, and the usage view only when it is held at home. Asking the
+    // orientation rather than the history is what makes this reversible — the
+    // turned views are never recorded as "previous" on purpose, so a tap off
+    // one used to strand you on the usage view until the device was turned
+    // away and back.
+    ui_show_screen(turned_view != SCREEN_COUNT ? turned_view : prev_non_splash_screen);
 }
 
 void ui_show_screen(screen_t screen) {

@@ -428,6 +428,10 @@ void loop() {
             if (q != last_quadrant) {
                 bool was_sideways = sideways(last_quadrant);
                 bool is_sideways  = sideways(q);
+                // The UI needs this whether or not the screen changes below:
+                // it decides where a tap on the splash returns to, and a tap
+                // can happen at any angle at any time.
+                ui_set_turned_view(turned_view(q));
                 if (is_sideways && was_sideways) {
                     // Straight from one side to the other without settling at
                     // home in between. The view has to follow, or turning the
