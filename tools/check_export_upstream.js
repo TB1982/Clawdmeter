@@ -28,7 +28,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const { originOf, THIRD_PARTY } = require('./lib/origin');
 
 const TOOLS = __dirname;
@@ -77,18 +77,43 @@ function parseDef(text, name) {
 
 const tmp = path.join(os.tmpdir(), `clawd-export-check-${process.pid}.h`);
 let failures = 0, checkedCells = 0;
+const skipped = [];
 
 // scale 1 keeps the comparison direct: at scale 1 a source cell is one exported
 // cell, so a mismatch is a mismatch and not an argument about which block it
 // landed in. Scale > 1 gets its own check below, on one animation.
-execFileSync('node', [EXPORTER, '--all', '--scale', '1', '--out', tmp],
-             { stdio: ['ignore', 'ignore', 'ignore'] });
+// stderr is captured rather than discarded: the exporter refuses some
+// animations on purpose and says why there, and a check that cannot tell a
+// refusal from a disappearance has to call both a failure or neither.
+// spawnSync and not execFileSync: the latter returns stdout, and the summary
+// this needs is on stderr so that --out - stays pipeable.
+const run = spawnSync('node', [EXPORTER, '--all', '--scale', '1', '--out', tmp], { encoding: 'utf8' });
+if (run.status !== 0) { console.error(run.stderr); process.exit(1); }
+const runOut = run.stderr;
 const header = fs.readFileSync(tmp, 'utf8');
+
+// Everything the exporter reported under "refused:", as name -> reason.
+const refused = new Map();
+{
+  const lines = runOut.split('\n');
+  let inList = false;
+  for (const line of lines) {
+    if (line.trim() === 'refused:') { inList = true; continue; }
+    if (!inList) continue;
+    const m = line.match(/^\s{2}([^:]+): (.+)$/);
+    if (m) refused.set(m[1], m[2]); else if (line.trim() === '') inList = false;
+  }
+}
 
 for (const name of eligible) {
   const src = sources.get(name);
   const def = parseDef(header, name);
-  if (!def) { console.log(`  FAIL ${name}: not in the exported header`); failures++; continue; }
+  if (!def) {
+    // Missing is fine only if the exporter said why. An animation that stops
+    // exporting because something broke says nothing at all.
+    if (refused.has(name)) { skipped.push(name); continue; }
+    console.log(`  FAIL ${name}: absent from the header and not refused`); failures++; continue;
+  }
 
   const id = ident(name);
   const palette = nums(header, `${id}_palette[`);
@@ -184,6 +209,8 @@ for (const name of eligible) {
 
 fs.unlinkSync(tmp);
 
-console.log(`  ok   ${eligible.length} animations round-trip, ${checkedCells.toLocaleString()} cells compared`);
+console.log(`  ok   ${eligible.length - skipped.length} animations round-trip, ` +
+            `${checkedCells.toLocaleString()} cells compared`);
+for (const n of skipped) console.log(`  ok   ${n} refused with a reason: ${refused.get(n)}`);
 if (failures) { console.log(`\n${failures} check(s) failed`); process.exit(1); }
 console.log('\nall checks passed');
