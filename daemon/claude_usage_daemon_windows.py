@@ -232,7 +232,7 @@ def _tw_market_open(now: datetime.datetime) -> bool:
     return 9 * 60 <= minutes < 13 * 60 + 30
 
 
-_stocks_cache: dict = {"at": 0.0, "field": None}
+_stocks_cache: dict = {"at": 0.0, "field": None, "open": 0}
 
 
 async def add_stock_fields(payload: dict) -> None:
@@ -260,7 +260,7 @@ async def add_stock_fields(payload: dict) -> None:
     now = time.time()
     if _stocks_cache["field"] and now - _stocks_cache["at"] < STOCKS_TTL:
         payload["k"] = _stocks_cache["field"]
-        payload["ko"] = 1 if _tw_market_open(datetime.datetime.now()) else 0
+        payload["ko"] = _stocks_cache["open"]
         return
 
     # tse_ covers listed stocks and ETFs; otc_ covers the OTC board. Which one
@@ -281,24 +281,52 @@ async def add_stock_fields(payload: dict) -> None:
         return
 
     by_ticker: dict[str, str] = {}
+    # "open" has to mean "this number is live", not "the clock says so".
+    any_live = False
     for row in data.get("msgArray") or []:
         code = row.get("c")
         if not code or code in by_ticker:
             continue
-        # z is the last trade; it is "-" outside trading or before the first
-        # match of the day, in which case y (previous close) is the honest
-        # number to show — flagged as closed by "ko".
-        last = row.get("z")
-        if not last or last == "-":
-            last = row.get("y")
-        prev = row.get("y")
-        try:
-            last_f = float(last)
-            prev_f = float(prev)
-            pct = ((last_f - prev_f) / prev_f * 100.0) if prev_f else 0.0
-        except (TypeError, ValueError):
+        # Finding the current price is not just reading "z".
+        #
+        # z is the price of the match happening right now and pz the one
+        # before, and TWSE matches every five seconds — so between matches
+        # BOTH are "-" even while the stock is trading heavily. Falling back to
+        # y (yesterday's close) there is what the first version did, and it put
+        # yesterday's number on screen under a line reading "market open". That
+        # is the exact failure the "at last close" label exists to prevent,
+        # arrived at from the other direction.
+        #
+        # The bid/ask ladder stays populated between matches, so its midpoint
+        # is the live price to within a tick. Order: this match, last match,
+        # mid, and only then yesterday.
+        def num(v):
+            try:
+                f = float(v)
+                return f if f > 0 else None
+            except (TypeError, ValueError):
+                return None
+
+        last_f = num(row.get("z")) or num(row.get("pz"))
+        if last_f is None:
+            bid = num((row.get("b") or "").split("_")[0])
+            ask = num((row.get("a") or "").split("_")[0])
+            if bid and ask:
+                last_f = (bid + ask) / 2.0
+            elif bid or ask:
+                last_f = bid or ask
+        live = last_f is not None
+        if not live:
+            last_f = num(row.get("y"))       # nothing live: yesterday's close
+        prev_f = num(row.get("y"))
+        if last_f is None or prev_f is None:
             continue
-        by_ticker[code] = f"{code},{last_f:g},{pct:+.1f}"
+        pct = ((last_f - prev_f) / prev_f * 100.0) if prev_f else 0.0
+        any_live = any_live or live
+        # Two decimals, trailing zeros stripped. A bid/ask midpoint lands on
+        # half a tick (105.025), which is a precision the price does not have
+        # and three decimals the screen cannot spare.
+        by_ticker[code] = f"{code},{round(last_f, 2):g},{pct:+.1f}"
 
     if not by_ticker:
         return
@@ -307,10 +335,15 @@ async def add_stock_fields(payload: dict) -> None:
     if not field:
         return
 
+    # Both conditions: the clock says trading hours AND at least one quote
+    # came back live. Either alone has been wrong — the clock alone labelled
+    # yesterday's closes as open.
+    is_open = 1 if (_tw_market_open(datetime.datetime.now()) and any_live) else 0
     _stocks_cache["at"] = now
     _stocks_cache["field"] = field
+    _stocks_cache["open"] = is_open
     payload["k"] = field
-    payload["ko"] = 1 if _tw_market_open(datetime.datetime.now()) else 0
+    payload["ko"] = is_open
 
 
 _WEATHER_RE = re.compile(r"^-?\d{1,3}(\.\d+)?,-?\d{1,3}(\.\d+)?$")

@@ -11,7 +11,7 @@ it cannot disagree with the build. For *why* an animation looks the way it does,
 see [`animation-craft.md`](animation-craft.md); for how the pipeline works, see
 [`../tools/README.md`](../tools/README.md).
 
-29 animations are compiled in. The splash shows one for **20,000 ms** and then advances to the next entry in the group the current
+28 animations are compiled in. The splash shows one for **20,000 ms** and then advances to the next entry in the group the current
 usage rate selects, wrapping at the end. The order below *is* the playback order:
 slot 0 is what you meet at boot, and the last slot is what loops back into it.
 
@@ -84,11 +84,7 @@ thing that asks for it — unlike a group entry, which only stops being picked.
 
 ## In the build, picked by nothing
 
-- `coin rain` — 16 frames, 1,280 ms
-
-These cost flash and never appear. That is a legitimate choice, but it should
-be a choice — `node tools/check_groups.js` prints this list too, so a name that
-landed here by accident shows up rather than going quiet.
+None — everything compiled in is reachable.
 
 ## Drawn, but kept out of the firmware
 
@@ -114,3 +110,4 @@ so a retired animation can still be opened and reworked:
 - dance bob
 - work type
 - jumping happy
+- coin rain
