@@ -52,7 +52,7 @@ const fs = require('fs');
 const path = require('path');
 const { PALETTE_SIZE, GRID_SIZES, HOLD_MIN_MS } = require('./lib/format');
 
-const GRID = 60;
+let GRID = 60;   // reset below if the base is cropped to a smaller one
 
 // ── The drop model, from docs/animation-craft.md ────────────────────────────
 //
@@ -83,11 +83,34 @@ const GRID = 60;
 // SPEED * FRAMES must come out to exactly GRID: then a drop falls the whole
 // height in one loop and there is no vertical repeat at all inside what you can
 // see. Any shorter wrap tiles the column, and a tiled column is a pattern.
-const SPEED = 3;           // cells per frame; 3 x 20 frames = the 60-cell grid
+// Cells per frame. Derived, not fixed: it has to satisfy SPEED * FRAMES = a
+// whole number of grid heights, and which speeds can do that depends on the
+// grid. 3 works at 60 and cannot at 40, where 3 and 40 are coprime and the
+// smallest frame count that closes is 40 — which does not divide this base's
+// 1700 ms. Fixing the speed made the tool reject a drawing for the shape of the
+// grid it was cropped to, which is not a fact about the drawing.
+let SPEED = 3;
+// A drop is DROP x DROP cells, not one.
+//
+// This is the number that was wrong, and it was wrong in the direction that
+// looks safe. Measured off "rainy days": its drops are 1 cell against a subject
+// 19 cells tall, so 1:19. At 60 cells the subject is 32 tall, and a 1-cell drop
+// is 1:32 — half the relative size, which is why the rain read as static rather
+// than as drops. 32/19 rounds to 2.
+//
+// The screen numbers say the same thing louder. "rainy days" plays full-panel
+// at 24 px a cell, so a drop is 24 px. Here a cell is 5 px in the weather
+// screen's box, so a 1-cell drop is 5 px: a fifth of the original, well past
+// the size where an eye can follow one of them instead of seeing the average.
+//
+// Density then follows rather than being chosen. 3.3% of 3600 is 119 cells,
+// and at 4 cells a drop that is about 30 drops — which is close to the
+// original's 13 in the same picture made three times wider.
+const DROP = 2;
 const P1 = 7, P2 = 11;     // coprime, per the craft note
 const PHI = 0.6180339887;  // for spreading drops inside a column
-const MAX_PER_ROW = Math.round(GRID / 20 * 2);        // Nova's "never three", as a fraction of the row
-const MAX_PER_ROW_BEHIND = Math.round(GRID / 20 * 1); // and her tighter one for the sheltered band
+const MAX_PER_ROW = Math.round(GRID / 20 * 2 / DROP);        // Nova's "never three", as a fraction of the row
+const MAX_PER_ROW_BEHIND = Math.round(GRID / 20 * 1 / DROP); // and her tighter one for the sheltered band
 
 // The three Nova mixed for "rainy days", in her proportions.
 const TIER_HEX = ['#5B93B0', '#99E6FF', '#E0F7FF'];   // far, mid, near
@@ -101,10 +124,12 @@ const NAME    = opt('--name', null);
 const OUT     = opt('--out', null);
 const PREVIEW = opt('--preview', null);
 const FRAMES_ARG = argv.includes('--frames') ? parseInt(opt('--frames', ''), 10) : null;
+const GRID_ARG = argv.includes('--grid') ? parseInt(opt('--grid', ''), 10) : null;
 
 if (!BASE) {
   console.error('node tools/make_rain_anim.js --base "<animation>" [--name "<new name>"]');
   console.error('  --frames N     output frames (default: derived from the base)');
+  console.error('  --grid N       crop onto a smaller square first (20/40/60)');
   console.error('  --out DIR      write the JSON (default: print a summary only)');
   console.error('  --preview DIR  write a contact-sheet PNG');
   process.exit(2);
@@ -128,12 +153,65 @@ function findBase(name) {
 
 const base = findBase(BASE);
 if (!base) { console.error(`No animation named "${BASE}".`); process.exit(1); }
-const side = base.frames[0].grid.length;
-if (side !== GRID) {
-  console.error(`"${BASE}" is ${side}x${side}. Rain is drawn on the ${GRID}-cell stage, ` +
-                `which is where the other weather creatures live — a ${side}-cell drawing ` +
-                `would render at a different size beside them.`);
+let side = base.frames[0].grid.length;
+if (!GRID_SIZES.includes(side)) {
+  console.error(`"${BASE}" is ${side}x${side}; the pipeline takes ${GRID_SIZES.join('/')}.`);
   process.exit(1);
+}
+
+// ── crop to the smallest grid the drawing fits in ───────────────────────────
+//
+// From the craft notes: "the biggest grid that fits is usually the wrong one
+// ... the grid is a resolution, not a canvas size: the panel is 480 px either
+// way, so fewer cells means each one is larger. Pick the smallest grid the art
+// fits in, not the largest the pipeline allows."
+//
+// It matters more for rain than for a creature, because the empty part of the
+// canvas is what the rain has to fill. "rainy days" is a subject filling 71% of
+// its 20x20 and thirteen drops in what is left. The same drawing loose on a
+// 60x60 fills 27%, so the same rain has two and a half times the sky to cover
+// and reads as thin however many drops are in it. Cropping fixes the ratio the
+// density is measured against, which no amount of tuning the density can.
+//
+// A crop and not a rescale: every cell keeps its value and its neighbours. 60
+// to 40 is a factor of 1.5, and a fractional rescale is a redraw.
+if (GRID_ARG || true) {
+  let x0 = side, y0 = side, x1 = -1, y1 = -1;
+  for (const f of base.frames) f.grid.forEach((row, y) => row.forEach((c, x) => {
+    if (!c) return;
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }));
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  const want = GRID_ARG || GRID_SIZES.find(g => g >= w && g >= h) || side;
+  if (!GRID_SIZES.includes(want)) {
+    console.error(`--grid ${want} is not one of ${GRID_SIZES.join('/')}.`);
+    process.exit(1);
+  }
+  if (want < w || want < h) {
+    console.error(`the drawing is ${w}x${h} cells and will not fit a ${want}-cell grid.`);
+    process.exit(1);
+  }
+  if (want !== side) {
+    // Centre horizontally; keep the floor margin proportional, which is the
+    // craft note's side/5 — the empty rows under his feet are why he reads as
+    // standing somewhere rather than on the bottom pixel of a rounded panel.
+    const ox = Math.floor((want - w) / 2) - x0;
+    const oy = (want - Math.round(want / 5) - h) - y0;
+    base.frames = base.frames.map(f => {
+      const g = Array.from({ length: want }, () => new Array(want).fill(0));
+      for (let y = 0; y < side; y++)
+        for (let x = 0; x < side; x++) {
+          const ny = y + oy, nx = x + ox;
+          if (ny >= 0 && ny < want && nx >= 0 && nx < want) g[ny][nx] = f.grid[y][x];
+        }
+      return { hold: f.hold, grid: g };
+    });
+    console.log(`  cropped    ${side}x${side} -> ${want}x${want}  ` +
+                `(drawing is ${w}x${h}; nothing rescaled)`);
+    side = want;
+  }
+  GRID = side;
 }
 
 // ── palette: keep the base's, append only what is missing ───────────────────
@@ -173,34 +251,35 @@ const baseLoopMs = baseHolds.reduce((a, b) => a + b, 0);
 // a weaker condition than it looks like it should be, and it is what lets the
 // rain run at a believable speed instead of the 3 cells a frame that a
 // grid-height wrap would force.
-const closes = (T) => (SPEED * T) % GRID === 0;
 
+// Search (speed, frame count) together. Two targets, both taken from
+// "rainy days": a frame every ~85 ms, and rain crossing the panel at about
+// 160 px a second — one 24 px cell every 150 ms there. Cell size on the panel
+// is what makes the second comparable across grids, so it is computed in
+// pixels rather than cells.
+const PANEL_PX = 300;                         // the weather screen's creature box
+const TARGET_MS = 85, TARGET_PX_S = 160;
 let FRAMES, FRAME_MS;
-if (FRAMES_ARG) {
-  FRAMES = FRAMES_ARG;
-  if (!closes(FRAMES)) { console.error(`--frames ${FRAMES} leaves a drop mid-fall at the loop point`); process.exit(1); }
-  if (baseLoopMs % FRAMES !== 0) { console.error(`--frames ${FRAMES} does not divide the base's ${baseLoopMs} ms`); process.exit(1); }
-  FRAME_MS = baseLoopMs / FRAMES;
-} else {
-  // Nearest workable cadence to TARGET_MS. Rain at 500 ms a frame is a slide
-  // show; at 20 it is a blur and costs frames nothing can see.
-  const TARGET_MS = 85;
+{
   const cands = [];
-  for (let T = 1; T <= 400; T++) {
-    if (!closes(T)) continue;
-    if (baseLoopMs % T !== 0) continue;
-    const ms = baseLoopMs / T;
-    if (ms < HOLD_MIN_MS) continue;
-    cands.push({ T, ms });
-  }
+  for (let v = 1; v <= 6; v++)
+    for (let T = 1; T <= 400; T++) {
+      if ((v * T) % GRID !== 0) continue;
+      if (baseLoopMs % T !== 0) continue;
+      const ms = baseLoopMs / T;
+      if (ms < HOLD_MIN_MS) continue;
+      if (FRAMES_ARG && T !== FRAMES_ARG) continue;
+      const pxs = v * (PANEL_PX / GRID) / (ms / 1000);
+      cands.push({ v, T, ms, cost: Math.abs(ms - TARGET_MS) / TARGET_MS
+                                 + Math.abs(pxs - TARGET_PX_S) / TARGET_PX_S });
+    }
   if (!cands.length) {
-    console.error(`No frame count both closes the rain loop and divides the base's ` +
-                  `${baseLoopMs} ms. The holds would have to change; their sum needs a ` +
-                  `divisor that is a multiple of ${GRID / Math.min(...speeds)}.`);
+    console.error(`No speed and frame count both close the rain loop and divide the ` +
+                  `base's ${baseLoopMs} ms. Its holds would have to change.`);
     process.exit(1);
   }
-  cands.sort((a, b) => Math.abs(a.ms - TARGET_MS) - Math.abs(b.ms - TARGET_MS));
-  ({ T: FRAMES, ms: FRAME_MS } = cands[0]);
+  cands.sort((a, b) => a.cost - b.cost);
+  ({ v: SPEED, T: FRAMES, ms: FRAME_MS } = cands[0]);
 }
 
 // How many output frames each base frame gets. Proportional with largest
@@ -232,14 +311,15 @@ const baseFrameAt = (i) => seq[i];
 const COLUMNS = [];
 for (let x = 0; x < GRID; x++) {
   const h = Math.sin(2 * Math.PI * x / P1) + Math.sin(2 * Math.PI * x / P2);
-  if (h < -0.8) continue;                        // this column stays dry
-  // How many drops are falling in this column, 2 to 5 (the far layer gets more More than it sounds like
+  if (x % DROP) continue;                        // blocks sit on a DROP-cell pitch
+  if (h < -0.55) continue;                       // this column stays dry
+  // How many drops are falling in this column, 1 to 3 (the far layer gets more More than it sounds like
   // it should be: the shelter rule removes every drop that would land under the
   // creature or his leaf, and the never-three pass removes more, so what is
   // below). More than it sounds like: the shelter rule removes every drop that
   // would land under the creature, and the never-three pass removes more, so
   // what is placed and what is seen differ by about half.
-  const n = 2 + Math.round(((h + 0.8) / 2.8) * 3);
+  const n = 1 + Math.round(((h + 0.55) / 2.55) * 2);
   // Where they are. Golden-ratio steps from a per-column start, which spreads
   // them without ever settling into a spacing.
   //
@@ -250,7 +330,7 @@ for (let x = 0; x < GRID; x++) {
   // the same mistake as regular columns, one axis over.
   let f = ((Math.sin(2 * Math.PI * x / 13) + 1) / 2);
   const offsets = [];
-  for (let k = 0; k < n; k++) { f = (f + PHI) % 1; offsets.push(Math.floor(f * GRID)); }
+  for (let k = 0; k < n; k++) { f = (f + PHI) % 1; offsets.push(Math.floor(f * GRID / DROP) * DROP); }
   COLUMNS.push({ x, offsets, tier: 0 });
 }
 
@@ -279,7 +359,7 @@ for (let x = 0; x < GRID; x++) {
   for (const c of COLUMNS) if (c.tier === 0) {
     const extra = [];
     let f = ((Math.sin(2 * Math.PI * c.x / 23) + 1) / 2);
-    for (let k = 0; k < Math.ceil(c.offsets.length * 0.8); k++) { f = (f + PHI) % 1; extra.push(Math.floor(f * GRID)); }
+    for (let k = 0; k < Math.ceil(c.offsets.length * 0.6); k++) { f = (f + PHI) % 1; extra.push(Math.floor(f * GRID / DROP) * DROP); }
     c.offsets = c.offsets.concat(extra);
   }
 }
@@ -359,12 +439,22 @@ for (let i = 0; i < FRAMES; i++) {
   for (const row of byRow.values()) {
     const open = thin(row.filter(d => !d.sheltered), MAX_PER_ROW);
     const band = thin(row.filter(d => d.sheltered), MAX_PER_ROW_BEHIND);
-    for (const d of open.concat(band)) grid[d.y][d.x] = TIER[d.tier];
+    for (const d of open.concat(band))
+      for (let dy = 0; dy < DROP; dy++)
+        for (let dx = 0; dx < DROP; dx++) {
+          const y = d.y + dy, x = d.x + dx;
+          if (y >= GRID || x >= GRID) continue;
+          if (src[y][x]) continue;               // a block still never covers the drawing
+          if (!d.sheltered && y >= roof[x]) continue;   // nor reaches past the shelter
+          grid[y][x] = TIER[d.tier];
+        }
   }
 
   // Beads last, so one is never overwritten by a drop passing the same cell.
   // Brightest tier on purpose: a bead sits on top of the leaf, in front of it.
-  for (const b of beads) grid[b.y][b.x] = TIER[2];
+  for (const b of beads)
+    for (let dx = 0; dx < DROP; dx++)
+      if (b.x + dx < GRID) grid[b.y][b.x + dx] = TIER[2];
 
   frames.push({ hold: FRAME_MS, grid });
 }
