@@ -86,7 +86,8 @@ const GRID = 60;
 const SPEED = 3;           // cells per frame; 3 x 20 frames = the 60-cell grid
 const P1 = 7, P2 = 11;     // coprime, per the craft note
 const PHI = 0.6180339887;  // for spreading drops inside a column
-const MAX_PER_ROW = Math.round(GRID / 20 * 2);   // Nova's "never three", as a fraction of the row
+const MAX_PER_ROW = Math.round(GRID / 20 * 2);        // Nova's "never three", as a fraction of the row
+const MAX_PER_ROW_BEHIND = Math.round(GRID / 20 * 1); // and her tighter one for the sheltered band
 
 // The three Nova mixed for "rainy days", in her proportions.
 const TIER_HEX = ['#5B93B0', '#99E6FF', '#E0F7FF'];   // far, mid, near
@@ -232,11 +233,13 @@ const COLUMNS = [];
 for (let x = 0; x < GRID; x++) {
   const h = Math.sin(2 * Math.PI * x / P1) + Math.sin(2 * Math.PI * x / P2);
   if (h < -0.8) continue;                        // this column stays dry
-  // How many drops are falling in this column, 3 to 6. More than it sounds like
+  // How many drops are falling in this column, 2 to 5 (the far layer gets more More than it sounds like
   // it should be: the shelter rule removes every drop that would land under the
   // creature or his leaf, and the never-three pass removes more, so what is
-  // placed and what is seen differ by about half. The summary prints both.
-  const n = 3 + Math.round(((h + 0.8) / 2.8) * 3);
+  // below). More than it sounds like: the shelter rule removes every drop that
+  // would land under the creature, and the never-three pass removes more, so
+  // what is placed and what is seen differ by about half.
+  const n = 2 + Math.round(((h + 0.8) / 2.8) * 3);
   // Where they are. Golden-ratio steps from a per-column start, which spreads
   // them without ever settling into a spacing.
   //
@@ -266,6 +269,19 @@ for (let x = 0; x < GRID; x++) {
   const near = Math.round(order.length / 6);
   const mid  = Math.round(order.length / 3);
   order.forEach((o, i) => { o.c.tier = i < near ? 2 : i < near + mid ? 1 : 0; });
+  // The far layer carries more drops than the others. Partly because distance
+  // crowds — the same rain seen from further away puts more of itself in the
+  // same angle — and partly because it is the only layer that continues behind
+  // him, where the shelter and his own outline remove most of what is placed.
+  // At an equal count the band came out at one drop every other row against
+  // four to six in the open, which reads as no rain back there rather than as
+  // rain seen dimly.
+  for (const c of COLUMNS) if (c.tier === 0) {
+    const extra = [];
+    let f = ((Math.sin(2 * Math.PI * c.x / 23) + 1) / 2);
+    for (let k = 0; k < Math.ceil(c.offsets.length * 0.8); k++) { f = (f + PHI) % 1; extra.push(Math.floor(f * GRID)); }
+    c.offsets = c.offsets.concat(extra);
+  }
 }
 
 // ── compose ─────────────────────────────────────────────────────────────────
@@ -283,13 +299,28 @@ for (let i = 0; i < FRAMES; i++) {
       if (src[y][x]) { roof[x] = y; break; }
 
   // Place this column's drops, each carried down by the frame index.
-  const placed = [];
+  //
+  // The far tier ignores the shelter: it is rain *behind* him, and stopping it
+  // at his outline would say the leaf covers the whole depth of the scene
+  // rather than the strip he is standing in. That is where the depth comes
+  // from — dim drops continuing past his shoulders while bright ones stop.
+  // The craft note's rule was always written on the assumption that this band
+  // has rain in it; reading it as "the band is dry" removed the back layer.
+  //
+  // Mid and near stop, and the frame in which one crosses the outline leaves a
+  // bead on whatever it hit.
+  const placed = [], beads = [];
   for (const c of COLUMNS) {
     for (const o of c.offsets) {
       const y = (o + i * SPEED) % GRID;
-      if (y >= roof[c.x]) continue;              // sheltered
-      if (grid[y][c.x]) continue;
-      placed.push({ x: c.x, y, tier: c.tier });
+      const sheltered = y >= roof[c.x];
+      if (sheltered && c.tier !== 0) {
+        // It landed this frame if it was above the outline last frame.
+        if (y - roof[c.x] < SPEED && roof[c.x] < GRID) beads.push({ x: c.x, y: roof[c.x] });
+        continue;
+      }
+      if (grid[y][c.x]) continue;                // never over the drawing
+      placed.push({ x: c.x, y, tier: c.tier, sheltered });
     }
   }
 
@@ -307,13 +338,33 @@ for (let i = 0; i < FRAMES; i++) {
     if (!byRow.has(d.y)) byRow.set(d.y, []);
     byRow.get(d.y).push(d);
   }
+  // Thin each row, open air and sheltered band counted separately.
+  //
+  // Separately because they are different densities in Nova's rule — "no two
+  // drops on a row inside the band enclosed between the leaf and him" against
+  // never three out in the open — and because a shared budget lets the open
+  // half of a row spend what the band needed.
+  //
+  // Thinning keeps drops spread along the row rather than keeping the brightest.
+  // Preferring bright was the first attempt and it deleted the back layer
+  // wherever a row was busy: the dim tier is the only one that continues behind
+  // him, so culling by tier culls exactly the depth the tiers exist for.
+  const thin = (list, cap) => {
+    if (list.length <= cap) return list;
+    list.sort((a, b) => a.x - b.x);
+    const step = list.length / cap, keep = [];
+    for (let k = 0; k < cap; k++) keep.push(list[Math.floor(k * step)]);
+    return keep;
+  };
   for (const row of byRow.values()) {
-    if (row.length <= MAX_PER_ROW) continue;
-    row.sort((a, b) => b.tier - a.tier || a.x - b.x);
-    row.length = MAX_PER_ROW;
+    const open = thin(row.filter(d => !d.sheltered), MAX_PER_ROW);
+    const band = thin(row.filter(d => d.sheltered), MAX_PER_ROW_BEHIND);
+    for (const d of open.concat(band)) grid[d.y][d.x] = TIER[d.tier];
   }
-  for (const row of byRow.values())
-    for (const d of row) grid[d.y][d.x] = TIER[d.tier];
+
+  // Beads last, so one is never overwritten by a drop passing the same cell.
+  // Brightest tier on purpose: a bead sits on top of the leaf, in front of it.
+  for (const b of beads) grid[b.y][b.x] = TIER[2];
 
   frames.push({ hold: FRAME_MS, grid });
 }
@@ -372,6 +423,25 @@ console.log(`  columns    ${COLUMNS.length} of ${GRID} rain  ` +
 console.log(`  drops      ${Math.min(...cells)}-${Math.max(...cells)} on screen per frame ` +
             `(${(cells.reduce((a,b)=>a+b,0) / cells.length / (GRID*GRID) * 100).toFixed(1)}% of the grid; ` +
             `"rainy days" is 3.5%)`);
+{
+  // Beads are the easiest part of this to break without noticing: they are a
+  // handful of cells, they land on the drawing rather than beside it, and a
+  // wrong roof or an off-by-one in the crossing test simply produces none.
+  let n = 0, on = 0;
+  const drawn = (x, y) => base.frames.some(f => f.grid[y][x]);
+  for (const f of frames)
+    for (let y = 0; y < GRID; y++)
+      for (let x = 0; x < GRID; x++)
+        if (f.grid[y][x] === TIER[2] && drawn(x, y)) { n++; }
+  for (const f of frames) {
+    let any = false;
+    for (let y = 0; y < GRID && !any; y++)
+      for (let x = 0; x < GRID; x++)
+        if (f.grid[y][x] === TIER[2] && drawn(x, y)) { any = true; break; }
+    if (any) on++;
+  }
+  console.log(`  beads      ${n} landing on the drawing, in ${on} of ${FRAMES} frames`);
+}
 console.log(`  seam       ${SEAM}`);
 console.log(`  palette    ${base.palette.length} -> ${palette.length}`);
 console.log(`  flash      ${(FRAMES * GRID * GRID / 1024).toFixed(1)} KB`);
