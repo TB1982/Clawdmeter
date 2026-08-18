@@ -21,6 +21,13 @@ The device boots into the splash. Tap the screen anywhere to switch to the Usage
 
 While the splash is up, the middle (PWR) button cycles animations. **Hold the power button for 3 seconds, then release, to put the device into pairing mode** — this clears the saved Bluetooth bond and re-advertises. The firmware also auto-rotates animations every 20 s within the current usage-rate group, so a long stretch on the splash isn't just one Clawd on loop.
 
+On a board with an IMU — the AMOLED-2.16 today — a quarter turn shows a third and fourth screen, and turning back restores the one you were on. Both stay dark until the daemon is told to fetch them; see [Turn the device](#turn-the-device).
+
+|              Weather               |              Stocks               |
+| :--------------------------------: | :-------------------------------: |
+| ![Weather](screenshots/weather.png) | ![Stocks](screenshots/stocks.png) |
+| Conditions and temperature, with the moon's phase in the corner — shown only while the moon is above the horizon | Your own tickers, red for up in the Taiwan convention, and a coin that keeps turning after the bell |
+
 ## What this fork adds
 
 Everything above is [HermannBjorgvin/Clawdmeter](https://github.com/HermannBjorgvin/Clawdmeter), which this fork tracks. Three things sit on top of it. All are optional, and the two that need setup are off until you turn them on.
