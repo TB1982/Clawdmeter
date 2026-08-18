@@ -266,6 +266,85 @@ hand-maintained at the top of the script: authorship isn't a property of a
 directory, since `drawn_anims/` holds both her originals and her edits to
 scrapes.
 
+## 2f. Send one the other way
+
+```bash
+node export_upstream.js --name "hanabi" --preview     # look before you commit to it
+node export_upstream.js --all --out nova_anims.h      # everything of ours that may travel
+node check_export_upstream.js                         # prove it lost nothing
+```
+
+`import_official.js` pointed the other way: our square grid cropped back down to
+a bounding box, written as upstream's `splash_anim_def_t`. The output is a header
+a stranger drops into a fork of **upstream** and compiles. Their code does not
+change — their `splash.cpp` already reads that struct.
+
+It exists because upstream's `tools/` holds three files: a GIF converter, an icon
+converter, and a README. There is no editor and no JSON format, so a fork of
+upstream cannot play *any* hand-drawn animation — not ours, not its own. Every
+piece needed to change that already lived here except the last step.
+
+### Nothing is resampled
+
+A cell becomes an n×n block of the same cell, which is the property
+`lib/format.js` relies on when it calls growing an animation free. Non-integer
+scaling would be a redraw, so `--scale` takes whole numbers and refuses the rest.
+
+`--scale auto` picks the largest whole factor that fits. Our 20×20 drawings go in
+at 2×, which lands them at 40×40 of their 60-cell grid.
+
+### Where it lands
+
+Their compositor draws at `STAGE_ANCHOR + (ox, oy)` with `STAGE_ANCHOR_Y = 11`,
+and every animation they ship bottoms out on row 48 — that shared ground line is
+what makes their transitions seamless, since each hands over on the same idle
+pose.
+
+Ours have no such pose; they are standalone scenes, so a ground line they never
+had buys nothing and the stage's 37-row ceiling costs real size. Hence
+`--fit full` (60×49, the default) and `--fit stage` (55×37, ground-line aligned —
+use it for a creature animation sharing a rate group with theirs).
+
+49 and not 60 because `oy` is unsigned: row 11 is the highest reachable.
+
+### What it refuses, and why refusing is the feature
+
+**Third-party art.** claudepix-origin animations are held back by the same rule
+and the same module (`lib/origin.js`) that keeps them off the published editor —
+see the License note below. A generated header handed to a stranger to compile is
+a distribution in the way a repo someone chooses to clone is not.
+
+**Anthropic's own art**, unless `--include-official`. Upstream ships it natively,
+with loop regions and stage placement this conversion cannot reproduce; exporting
+it back would be a worse copy of what they already have.
+
+**More than 15 drawn colours.** Their palette holds 16 including the background.
+Reducing a palette is a redraw, not a conversion, so it says which animation and
+by how much and stops. Nothing here has ever needed it — `hanabi` uses exactly 15.
+
+### Checking it
+
+`check_export_upstream.js` parses the emitted header back — not the exporter's
+internals — undoes the crop, scale and palette remap, and compares every cell
+against the source JSON. Currently 14 animations, 170,400 cells.
+
+It cannot check the contract with upstream: field order in `splash_anim_def_t`,
+what index 0 means, where `ox`/`oy` are measured from. Those live in their
+`splash.cpp`, so that check is a build against a real upstream tree:
+
+```bash
+T=$(mktemp -d); git -C . archive origin/main | tar -x -C "$T"
+node tools/export_upstream.js --name "hanabi" --out "$T/firmware/src/nova_anims.h"
+# make the three edits the generated header documents, then:
+pio run -d "$T/firmware" -e waveshare_amoled_216
+```
+
+Done on 2026-08-18 against upstream `bbfec07`: builds, and the animation renders
+in their sim through their engine. Worth redoing whenever they touch the struct —
+the first version of the exporter emitted table entries as loose initialisers at
+file scope, text that looks like C and that no compiler accepts, and only this
+found it.
+
 ## 3. Convert to C
 
 ```bash

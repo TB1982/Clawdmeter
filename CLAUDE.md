@@ -313,6 +313,29 @@ Animations reach the screen through the rate groups in `splash.cpp`
 (`GROUP_NAMES`), matched by literal name — adding a JSON is not enough, the
 name has to be listed in a group or nothing will ever pick it.
 
+**Two converters bridge the format gap with upstream**, and they are mirrors:
+`import_official.js` flattens their bounding-box crop onto our square grid so
+the editor can open it; `export_upstream.js` crops ours back down and writes
+their `splash_anim_def_t`, so a fork of *upstream* can play something drawn
+here. Upstream's `tools/` has no editor and no JSON format at all — three files,
+all GIF-or-icon converters — so without the second one a fork of theirs cannot
+play any hand-drawn animation, ours or its own.
+
+**What may leave the repo is decided by `tools/lib/origin.js`**, shared by
+`export_upstream.js` and `build_editor_samples.js --public`. Origin is read from
+whether the *name* appears in a third-party source dir, not from which file won
+the load order — a claudepix animation edited here has a copy in `drawn_anims/`,
+and calling it ours because of where the file sits is the laundering the label
+exists to prevent. claudepix states no licence and its author has been
+unreachable since 2026-08-15, so those are held back from both the hosted editor
+and any exported header. Unreachable is not permission.
+
+`check_export_upstream.js` parses the emitted header back and compares every
+cell against the source JSON. It cannot check the contract with *upstream* —
+struct field order, what index 0 means, where `ox`/`oy` are measured from — so
+that one is a build against a real upstream tree, written down in
+`tools/README.md` § 2f and last run 2026-08-18 against `bbfec07`.
+
 ## User profile / preferences
 
 See `~/.claude/projects/.../memory/` files for persistent context (user is an embedded-beginner senior dev, brand-conscious, prefers iterative UI refinement, dislikes me authoring my own art when third-party assets are intended). Always read those memory files at session start.
