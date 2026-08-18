@@ -224,6 +224,28 @@ static void check_serial_cmd() {
                 if (ui_get_current_screen() == SCREEN_WEATHER) ui_show_screen(SCREEN_USAGE);
                 else                                            ui_show_screen(SCREEN_WEATHER);
             }
+            // `wx <code>` puts a WMO weather code on screen without waiting for
+            // the sky to produce one. Same family as `party` and `buzz`: a state
+            // that otherwise needs waiting, on demand.
+            //
+            // It earns its place more than those two do. Taipei measured over a
+            // year has zero hours of snow, fog or thunderstorm, so three of the
+            // nine categories can never be checked on this desk at all, and rain
+            // is a matter of days. Without this the only way to see a weather
+            // creature is to be lucky.
+            //
+            // It overwrites the cached payload rather than faking one, so the
+            // next daemon push replaces it — which is the right lifetime for a
+            // debugging aid. Codes are Open-Meteo's: 0 clear, 2 partly cloudy,
+            // 3 overcast, 45 fog, 51 drizzle, 63 rain, 71 snow, 95 thunder.
+            else if (strncmp(cmd_buf, "wx ", 3) == 0) {
+                int code = atoi(cmd_buf + 3);
+                usage.weather_code = code;
+                if (usage.weather_temp == 0.0f) usage.weather_temp = 20.0f;
+                ui_update(&usage);
+                if (ui_get_current_screen() != SCREEN_WEATHER) ui_show_screen(SCREEN_WEATHER);
+                Serial.printf("WX %d\n", code);
+            }
             cmd_pos = 0;
         } else if (cmd_pos < CMD_BUF_SIZE - 1) {
             cmd_buf[cmd_pos++] = c;
