@@ -26,6 +26,10 @@ const read = f => fs.readFileSync(f, 'utf8');
 
 // Every animation compiled into the build, with the timing that ships.
 // splash_anims[] rows are {"name", "Category", frames, side, palette, frames, holds}.
+// Category is [^"]* and not [^"]+: the converter emits "" for a drawing that was
+// never given one, and requiring a character made that animation invisible to
+// every tool built on this reader — including check_groups.js, which then
+// reported it as missing from a build it was actually in.
 function built() {
   const hdr = read(P.header);
   const holds = {};
@@ -33,7 +37,7 @@ function built() {
     holds[m[1]] = m[2].split(',').map(Number);
   }
   const out = [];
-  for (const m of hdr.matchAll(/\{"([^"]+)", "([^"]+)", (\d+), (\d+), \w+, \w+, (\w+)\}/g)) {
+  for (const m of hdr.matchAll(/\{"([^"]+)", "([^"]*)", (\d+), (\d+), \w+, \w+, (\w+)\}/g)) {
     const h = holds[m[5]] || [];
     out.push({
       name: m[1],
@@ -66,6 +70,13 @@ function directNames() {
     if (!f.endsWith('.cpp') || f === 'splash.cpp') continue;
     const txt = stripComments(read(path.join(P.srcDir, f)));
     for (const m of txt.matchAll(/splash_mini_create\s*\([^,]+,\s*"([^"]+)"/g)) out.push({file: f, name: m[1]});
+    // The weather screen picks by condition from WEATHER_ANIMS[], so its names
+    // never appear at a splash_mini_create() call. Reaching them through the
+    // table is the only way they get checked, and they need it more than most:
+    // a name that resolves to nothing here shows the same empty slot as a
+    // category nobody has drawn yet, so it would never look like a bug.
+    const wx = txt.match(/WEATHER_ANIMS\[\] = \{([\s\S]*?)\n\};/);
+    if (wx) for (const m of wx[1].matchAll(/"([^"]+)"\s*\}/g)) out.push({file: f, name: m[1]});
   }
   return out;
 }

@@ -506,6 +506,20 @@ lv_obj_t* splash_mini_canvas(splash_mini_t *m) {
 // than a creature: the moon on the weather screen is frame N of an eight-frame
 // set, chosen by the phase, and it must sit still. splash_mini_tick() is simply
 // not called on a pinned instance, so nothing here has to learn a paused state.
+bool splash_mini_set_anim(splash_mini_t *m, const char *anim_name) {
+    if (!m || !anim_name) return false;
+    for (int i = 0; i < SPLASH_ANIM_COUNT; i++) {
+        if (strcmp(splash_anims[i].name, anim_name) != 0) continue;
+        if (m->anim == &splash_anims[i]) return true;      // already there
+        m->anim = &splash_anims[i];
+        m->frame = 0;
+        m->started_ms = millis();
+        mini_render(m);
+        return true;
+    }
+    return false;
+}
+
 void splash_mini_set_frame(splash_mini_t *m, uint16_t frame) {
     if (!m || !m->anim || m->anim->frame_count == 0) return;
     uint16_t f = frame % m->anim->frame_count;
