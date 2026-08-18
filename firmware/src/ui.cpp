@@ -676,12 +676,16 @@ static void update_stocks(const UsageData* d) {
 
     if (lv_obj_t* cc = splash_mini_canvas(coin_icon)) {
         lv_obj_clear_flag(cc, LV_OBJ_FLAG_HIDDEN);
-        // Parked on the face rather than wherever the spin happened to stop —
-        // a coin frozen edge-on is a vertical bar, which reads as a glitch
-        // rather than as a coin at rest.
-        if (!d->stocks_open) splash_mini_set_frame(coin_icon, 0);
     }
-    coin_spinning = d->stocks_open;
+    // Turns whether or not the market is open. It began as an indicator that
+    // parked on its face at the close, and Nova's call on 2026-08-18 was to
+    // let it keep going: whether trading is on is already said by the line
+    // below the quotes, and by the clock on the wall. Spending the coin on a
+    // third copy of that bought nothing and cost a screen that is motionless
+    // for most of the day.
+    //
+    // splash_mini_set_frame() stays in the API; it is what pins the moon.
+    coin_spinning = true;
 
     lv_label_set_text(lbl_stock_state, d->stocks_open ? "market open" : "at last close");
     lv_obj_set_style_text_color(lbl_stock_state,
