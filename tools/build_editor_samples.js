@@ -49,24 +49,7 @@ const byName = new Map();
 // See tools/README.md § License note. The point of putting this in the editor
 // is that the editor is one file that gets downloaded and carried away from the
 // repo, and the README does not travel with it.
-const namesIn = dir => {
-  const d = path.join(__dirname, dir);
-  if (!fs.existsSync(d)) return new Set();
-  return new Set(fs.readdirSync(d)
-    .filter(f => f.endsWith('.json') && !f.startsWith('_'))
-    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(d, f), 'utf8')).name; }
-                catch { return null; } })
-    .filter(Boolean));
-};
-const fromClaudepix = namesIn('claudepix_data');
-const fromCustom    = namesIn('custom_anims');
-const fromOfficial  = namesIn('official_anims');
-
-const originOf = name =>
-  fromCustom.has(name)    ? 'claudepix+' :   // claudepix animation, props added here
-  fromClaudepix.has(name) ? 'claudepix'  :
-  fromOfficial.has(name)  ? 'official'   :
-                            'drawn';
+const { originOf } = require('./lib/origin.js');
 
 for (const dir of SRC_DIRS) {
   if (!fs.existsSync(dir)) continue;
@@ -110,7 +93,7 @@ for (const dir of SRC_DIRS) {
 // exclusion is what you do when you cannot ask, and it is reversible the day
 // that changes.
 const PUBLIC = process.argv.includes('--public');
-const THIRD_PARTY = new Set(['claudepix', 'claudepix+']);
+const { THIRD_PARTY } = require('./lib/origin.js');
 
 const anims = [...byName.values()].filter(a => !(PUBLIC && THIRD_PARTY.has(a.s)));
 anims.sort((x, y) => x.c.localeCompare(y.c) || x.n.localeCompare(y.n));
