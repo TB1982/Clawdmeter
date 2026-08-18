@@ -7,6 +7,7 @@
 #include "clawd_still.h"
 #include "icons.h"
 #include "hal/board_caps.h"
+#include "coin_band.h"
 
 // Custom fonts (scaled for 314 PPI, ~1.9x from original 165 PPI)
 LV_FONT_DECLARE(font_tiempos_56);
@@ -67,6 +68,8 @@ struct Layout {
     // Stocks screen
     int16_t stock_row_h;             // vertical pitch between quote rows
     int16_t stock_top;               // first row's y
+    int16_t stock_band_h;            // falling-coin strip along the bottom
+    int16_t stock_state_y;           // "market open" line, above the strip
 
     // Bluetooth screen
     int16_t bt_info_panel_h;
@@ -119,6 +122,8 @@ static void compute_layout(const BoardCaps& c) {
     L.weather_deg_dy = 10;
     L.stock_row_h = 74;
     L.stock_top = 118;
+    L.stock_band_h = 58;
+    L.stock_state_y = 384;
 
     if (c.height >= 460) {
         // Large layout — tuned for 480x480 (AMOLED-2.16).
@@ -189,6 +194,8 @@ static void compute_layout(const BoardCaps& c) {
         L.weather_deg_dy = 5;
         L.stock_row_h = 38;
         L.stock_top = 56;
+        L.stock_band_h = 26;
+        L.stock_state_y = 190;
         L.bt_info_panel_h = 90;
         L.bt_reset_zone_h = 60;
         L.bt_title_font    = &font_tiempos_34;
@@ -267,6 +274,7 @@ static lv_obj_t* lbl_stock_chg[STOCK_ROWS]  = {};
 static lv_obj_t* lbl_stock_state = nullptr;
 static splash_mini_t* coin_icon = nullptr;   // 'market coin', spins while trading
 static bool coin_spinning = false;
+static coin_band_t* coin_band = nullptr;   // the rain, drawn live
 static uint32_t  last_data_ms = 0;      // lv_tick when the last valid usage update landed
 static bool      data_received = false; // any valid update since boot
 static bool      data_ok = true;        // last payload's ok flag; a {"ok":false} beat = "no fresh data"
@@ -577,6 +585,16 @@ static void init_stocks_screen(lv_obj_t* scr) {
         lv_obj_set_pos(lbl_stock_px[i], L.scr_w - L.margin - L.scr_w / 4 - L.scr_w / 3 - 8, y);
     }
 
+    // The rain, along the bottom. Its own strip rather than the whole screen:
+    // small dense coins in a band read as a shower, where seven-cell coins
+    // scattered over 480px read as a handful of discs. Drawn live rather than
+    // played from a baked animation, because the animation format is
+    // square-only and a banner is not square.
+    coin_band = coin_band_create(stocks_container, L.scr_w - 2 * L.margin, L.stock_band_h);
+    if (lv_obj_t* cb = coin_band_canvas(coin_band)) {
+        lv_obj_set_pos(cb, L.margin, L.scr_h - L.stock_band_h - 12);
+    }
+
     // Whether these numbers are live or a leftover close. Most of any given day
     // the market is shut, so an unlabelled price would be the device telling a
     // quiet lie for the majority of its waking hours.
@@ -584,7 +602,7 @@ static void init_stocks_screen(lv_obj_t* scr) {
     lv_label_set_text(lbl_stock_state, "");
     lv_obj_set_style_text_font(lbl_stock_state, L.pace_font, 0);
     lv_obj_set_style_text_color(lbl_stock_state, COL_DIM, 0);
-    lv_obj_align(lbl_stock_state, LV_ALIGN_BOTTOM_MID, 0, L.anim_y);
+    lv_obj_align(lbl_stock_state, LV_ALIGN_TOP_MID, 0, L.stock_state_y);
 
     // Same top-left slot the logo and the corner creature share, which
     // apply_corner_badge() clears on this screen. It spins while the market is
@@ -1074,6 +1092,11 @@ void ui_tick_anim(void) {
     // burning redraws while something else is on show.
     if (current_screen == SCREEN_STOCKS) {
         if (coin_spinning) splash_mini_tick(coin_icon);
+        // The band rains whenever this screen is up. Whether the market is
+        // trading is already said twice — by the corner coin and by the line
+        // under the quotes — and a third copy would only mean the screen is
+        // motionless for most of the day.
+        coin_band_tick(coin_band);
         return;
     }
     if (current_screen != SCREEN_USAGE) return;

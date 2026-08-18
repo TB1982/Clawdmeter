@@ -123,6 +123,14 @@ const EXCLUDE = new Set([
   // holds the source, so "jump blossom" can always be rebuilt against it, and
   // the plain jump comes back by removing this line.
   'jumping happy',
+
+  // The banner on the stocks screen draws its coins live (firmware/src/
+  // coin_band.cpp) rather than playing this back: the animation format is
+  // square-only by design, and a wide short strip cannot be a square. Keeping
+  // the 40x40 version compiled in would cost 25 KB of flash for frames nothing
+  // reads. The JSON and tools/make_coin_rain.js stay, so it remains an editor
+  // sample and can be brought back full-screen by deleting this line.
+  'coin rain',
 ]);
 
 function safeIdent(s) {
