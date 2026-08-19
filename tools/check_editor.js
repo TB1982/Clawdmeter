@@ -116,22 +116,75 @@ check(`HOLD_MIN matches format.js (${HOLD_MIN_MS})`,
 // preserves, so the day min and step are conflated those rhythms are lost.
 check('the hold field keeps step and min separate',
       /inp\.min = HOLD_MIN; inp\.step = 20;/.test(html));
-check('the hold strings exist in all four locales',
-      ['holdWhole', 'holdFloor']
-        .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
 check('the 60 option exists in the size select',
       /<option value="60">/.test(html));
-check('badResize exists in all four locales',
-      (html.match(/badResize:/g) || []).length === 4);
-check('the clipboard strings exist in all four locales',
-      ['clipCopied', 'clipPasted', 'clipPastedNew', 'clipFull', 'clipNewer']
-        .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
-check('the origin strings exist in all four locales',
-      ['srcClaudepix', 'srcClaudepixProps', 'srcOfficial', 'srcDrawn', 'srcUnknown']
-        .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
-check('the credit is split into per-origin parts in all four locales',
-      ['creditClaudepix', 'creditOfficial']
-        .every(k => (html.match(new RegExp(k + ':', 'g')) || []).length === 4));
+// 5. The locale tables, compared against each other rather than counted.
+//
+// These checks used to count how many times a key appeared in the file and
+// assert the answer was 4. That number was standing in for "no locale is
+// missing it", and it only covered the dozen keys somebody thought to list —
+// so the day a fifth language arrived, five checks failed for having the wrong
+// literal in them while the other 89 keys stayed unguarded. Comparing key sets
+// covers all of them and has no count to update.
+console.log('\nlocales:');
+{
+  const i = html.indexOf('const I18N = {');
+  const I18N = eval('(' + html.slice(i + 'const I18N = '.length,
+                                     html.indexOf('\n};', i) + 2) + ')');
+  const LANGS = eval('(' + (html.match(/const LANGS = (\{[^;]*\});/) || [])[1] + ')');
+
+  const codes = Object.keys(I18N);
+  check(`the picker offers exactly the tables that exist (${codes.join(', ')})`,
+        Object.keys(LANGS).sort().join() === codes.slice().sort().join());
+
+  // English is the fallback every other locale falls through to, so it is the
+  // one table that cannot have a hole in it.
+  const base = Object.keys(I18N.en);
+  for (const code of codes) {
+    if (code === 'en') continue;
+    const keys = Object.keys(I18N[code]);
+    const missing = base.filter(k => !keys.includes(k));
+    const extra = keys.filter(k => !base.includes(k));
+    check(`${code} carries all ${base.length} keys` +
+          (missing.length ? ` — missing ${missing.join(', ')}` : '') +
+          (extra.length ? ` — has no-longer-used ${extra.join(', ')}` : ''),
+          !missing.length && !extra.length);
+  }
+
+  // A translation that drops a {placeholder} loses the number it was carrying,
+  // and loses it silently: t() substitutes what it finds and says nothing about
+  // what it didn't. Nothing about the sentence looks wrong afterwards.
+  //
+  // Counted, not de-duplicated. `sub` says '{side}×{side}' and a translation
+  // carrying one of them renders "20×" — a set comparison calls that identical,
+  // which is how the first version of this check passed a fault planted in it
+  // on purpose. If a language ever genuinely needs a different count, this says
+  // so and that is the right moment to decide it.
+  const ph = v => (String(v).match(/\{\w+\}/g) || []).sort().join(',');
+  const drift = [];
+  for (const code of codes) {
+    if (code === 'en') continue;
+    for (const k of base) {
+      if (ph(I18N.en[k]) !== ph(I18N[code][k])) {
+        drift.push(`${code}.${k} has [${ph(I18N[code][k]) || '-'}], en has [${ph(I18N.en[k]) || '-'}]`);
+      }
+    }
+  }
+  check('every locale carries the same placeholders as English' +
+        (drift.length ? ` — ${drift.join('; ')}` : ''), !drift.length);
+
+  // An empty string renders as a blank control, which is the failure the
+  // fallback-to-English rule exists to avoid — except a present-but-empty key
+  // never reaches the fallback, because it is present.
+  const blank = [];
+  for (const code of codes)
+    for (const [k, v] of Object.entries(I18N[code]))
+      if (typeof v === 'string' && !v.trim()) blank.push(`${code}.${k}`);
+  check('no locale has a present-but-empty string' +
+        (blank.length ? ` — ${blank.join(', ')}` : ''), !blank.length);
+}
+
+console.log('');
 // A footer wired straight to one key would credit claudepix on a build that
 // carries none of their work.
 check('the footer is composed, not bound to a single key',

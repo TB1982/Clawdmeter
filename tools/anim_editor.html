@@ -454,13 +454,22 @@ const HOLD_MIN = 20;
 const cell = ch => ch === '.' ? 0 : parseInt(ch, 36);
 
 // ── language ─────────────────────────────────────────────────────────────────
-// The four the device software speaks. Markup keeps its zh-TW text inline as
-// the fallback, so the page is still readable if this never runs.
+// The four the device software speaks, plus one it does not. Markup keeps its
+// zh-TW text inline as the fallback, so the page is still readable if this
+// never runs.
+//
+// Spanish is here and nowhere else in the project on purpose. This file is the
+// only part of it a stranger opens *before* deciding whether to draw anything,
+// and it opens from file:// with no server to negotiate a language with. The
+// rest of the software talks to someone who already owns a board; this talks to
+// someone who might make something for one, and that is a different, wider set
+// of people. So the editor's language list is allowed to run ahead of the
+// firmware's rather than mirror it.
 //
 // A missing key falls back to English rather than rendering blank — a half-
 // translated UI with holes in it is worse than one with two languages in it,
 // because a blank button doesn't tell you what it does.
-const LANGS = { 'zh-TW': '繁體中文', 'en': 'English', 'ja': '日本語', 'zh-CN': '简体中文' };
+const LANGS = { 'zh-TW': '繁體中文', 'en': 'English', 'ja': '日本語', 'zh-CN': '简体中文', 'es': 'Español' };
 
 const I18N = {
 'zh-TW': {
@@ -754,6 +763,79 @@ const I18N = {
   cBody: '身体（品牌赭红）', cEye: '眼睛（与背景同色，读起来是洞）',
   cHeart: '亮爱心', cHeartDark: '暗爱心', cPetal: '花瓣', cPistil: '花心',
   cEarcup: '耳罩', cHeadband: '头带', cSnore: '打呼泡泡', cNote: '音符',
+},
+'es': {
+  title: 'Editor de animaciones de Clawdmeter',
+  sub: '{side}×{side} · máx. {max} colores · duración propia por fotograma · la exportación va directa a <code>tools/drawn_anims/</code>',
+  pen: 'Lápiz', erase: 'Borrador', fill: 'Relleno', pick: 'Cuentagotas', select: 'Selección',
+  undo: 'Deshacer', onion: 'Papel cebolla', paste: 'Pegar', play: '▶ Reproducir', stop: '■ Detener',
+  selecting: 'Seleccionado ·', copy: 'Copiar', flipH: 'Voltear H', flipV: 'Voltear V',
+  clearSel: 'Borrar', selectAll: 'Seleccionar todo', deselect: 'Deseleccionar',
+  selHint: 'Las flechas mueven una celda · Esc lo suelta · cópialo para pegarlo en otro fotograma',
+  previewH: 'Vista en el dispositivo (negro, tamaño real)',
+  capSplash: 'Splash completo · {px}px por celda', capBadge: 'Insignia de esquina · {px}px por celda',
+  capWait: 'Panel de espera · {px}px por celda (96px en placas más pequeñas, o sea aún menos)',
+  palH: 'Los colores de esta animación', pickH: 'Colores',
+  pickHint: 'Haz clic para añadirlo y seleccionarlo. Si ya está en uso, lo selecciona directamente.', addColour: 'Añadir',
+  framesH: 'Fotogramas', frameHint: 'Sin nada seleccionado, ← → recorren los fotogramas',
+  timingSum: '{ms} ms · {loops}×',
+  timingTitle: 'Una animación ocupa la pantalla {slot} s — esto es lo que dura el bucle y cuántas veces cabe en ese tiempo',
+  timingLong: '{n} fotogramas · {ms} ms en total · el dispositivo le da {slot} s a cada animación, y esta se repite {loops} veces dentro de ese rato',
+  timingClean: 'Termina en un bucle completo ✓',
+  timingCut: '✂ el corte cae en el fotograma {f} — el último bucle solo llega al {pct}%',
+  timingCutTitle: 'Los {slot} s se acaban en este fotograma y la siguiente animación toma el relevo',
+  timingFix: 'Para terminar en un bucle completo, que el total sea:',
+  timingCand: '{n}× = {ms} ms ({delta})',
+  refsH: 'Especificación y notas',
+  refsBody: '<b>Especificación del formato</b> (<a href="{skillUrl}" target="_blank" rel="noopener">SKILL.md</a>)'
+          + ' — la que está escrita para Claude Code: 20×20 o 40×40, {max} colores como máximo, una duración por fotograma.'
+          + ' Dos trampas que fallan en silencio: <b>un nombre repetido sustituye a otra animación</b> y'
+          + ' <b>un nombre que no aparezca en las listas de grupo de <code>splash.cpp</code> no se elige jamás</b>.'
+          + '<br><br><b>Notas de oficio</b> (<a href="{kmUrl}" target="_blank" rel="noopener">animation-craft.md</a>)'
+          + ' — lo que aprendimos dibujándolas: el negro se come los colores oscuros · a 4 px la insignia'
+          + ' transmite densidad y color, nunca forma · una forma puede quedar cortada · nada flota.',
+  frameAdd: '+ Añadir', frameDup: 'Duplicar', frameDel: 'Eliminar',
+  frameLeft: '← Mover a la izquierda', frameRight: 'Mover a la derecha →',
+  infoH: 'Animación', labelName: 'Nombre', labelCat: 'Categoría', labelSize: 'Tamaño',
+  sizeUp: 'Ampliada a 40×40: cada celda pasó a ser un bloque de 2×2, así que se ve idéntica — ahora se puede afinar.',
+  sizeDown: 'Reducida a 20×20: cada bloque de 2×2 pasó a ser una celda, así que se perdió detalle. Cmd-Z (o Deshacer) lo devuelve.',
+  badSize: 'Esta animación es de {n}×{n}; el editor admite {ok}.',
+  badResize: '{a} y {b} no son múltiplos enteros el uno del otro, e interpolar pixel art es volver a dibujarlo. Pasa por 20×20 ({a}→20 pierde detalle).',
+  loadH: 'Cargar una animación existente', loadBtn: 'Cargar', loadPose: 'Cargar plantilla de Clawd', clearAll: 'Vaciar',
+  srcClaudepix: 'de claudepix', srcClaudepixProps: 'de claudepix, con accesorios añadidos aquí',
+  srcOfficial: 'del arte oficial de Anthropic', srcDrawn: 'dibujada para este proyecto',
+  srcUnknown: 'origen sin registrar',
+  creditClaudepix: 'Las animaciones marcadas como claudepix están adaptadas de <a href="https://claudepix.vercel.app" target="_blank" rel="noopener">claudepix</a> '
+        + 'de <a href="https://x.com/amaanbuilds" target="_blank" rel="noopener">@amaanbuilds</a>. ',
+  creditOfficial: 'Las animaciones marcadas como arte oficial vienen del arte de Clawd de la propia Anthropic; las marcadas como de este proyecto se dibujaron aquí. ',
+  credit: 'El personaje Clawd pertenece a Anthropic. Este es un proyecto comunitario sin ánimo de lucro, '
+        + 'sin licencia de ninguna de las dos partes y sin licencia para nadie. Comprueba que tu propio uso sea apropiado. '
+        + 'Se incluyen porque una cuadrícula vacía es justo donde abandona quien no ha hecho pixel art nunca — '
+        + 'están aquí para copiarlas, desmontarlas y modificarlas, no para volver a publicarlas como obra propia. '
+        + 'Si cualquiera de las dos partes prefiere que no estén, abre una issue y se retiran.',
+  importPh: 'Pega aquí el JSON de la animación y pulsa Importar (el formato se detecta solo)',
+  importBtn: 'Importar JSON',
+  exportH: 'Exportar', download: 'Descargar .json', copyClip: 'Copiar al portapapeles', copied: 'Copiado ✓',
+  exportHint: 'Guárdalo en <code>tools/drawn_anims/</code>, ejecuta <code>node tools/convert_to_c.js</code> '
+            + 'y luego añade el nombre a una lista de grupo en <code>splash.cpp</code>.',
+  palFull: 'Máximo {n} colores, contando el vacío. Quita antes alguno que no se use.',
+  swEmpty: 'Vacío (fondo)', swRemove: 'Quitar (no lo usa ninguna celda)',
+  darkWarn: '⚠ {list} será casi invisible en un panel negro. '
+          + '(#0F0F0F es la excepción — es el color del ojo, deliberadamente igual que el fondo.)',
+  hexFormat: 'Usa el formato #RRGGBB', holdTitle: 'duración, ms',
+  sampleInfo: '{n} fotogramas · {c} colores · {ms} ms en total',
+  noSamples: '(aún no hay muestras generadas — ejecuta node tools/build_editor_samples.js)',
+  badJson: 'El JSON no es válido', canvasSize: 'El lienzo es de {w}×{h} y tiene que ser de {n}×{n}',
+  holdWhole: 'El fotograma {i} dura {v} — las duraciones tienen que ser ms enteros (el firmware las guarda como uint16_t, y un decimal falla al compilar)',
+  holdFloor: 'El fotograma {i} dura {v}ms, por debajo del mínimo de {min}ms. El firmware revisa los fotogramas una vez por vuelta del bucle principal, así que una duración menor no se respeta',
+  clipCopied: 'Copiado {h}×{w} al portapapeles del sistema · pégalo en otro editor',
+  clipPasted: 'Pegado {h}×{w}', clipPastedNew: 'Pegado {h}×{w} · {n} colores añadidos',
+  clipFull: 'No se ha pegado nada · esto necesita {n} colores nuevos y solo quedan {r} huecos (máx. {max})',
+  clipNewer: 'No se ha pegado nada · esto viene de un formato más nuevo (clawdclip={v}); este editor llega hasta {cur}',
+  unknownFormat: 'Formato no reconocido', imported: 'Importados {n} fotogramas',
+  cBody: 'Cuerpo (terracota de la marca)', cEye: 'Ojo (igual que el fondo, se lee como un hueco)',
+  cHeart: 'Corazón, claro', cHeartDark: 'Corazón, oscuro', cPetal: 'Pétalo', cPistil: 'Centro de la flor',
+  cEarcup: 'Almohadilla del casco', cHeadband: 'Diadema', cSnore: 'Burbuja de ronquido', cNote: 'Nota musical',
 },
 };
 
@@ -2037,6 +2119,9 @@ function applyLang(next) {
       if (s.startsWith('zh')) return 'zh-CN';
       if (s.startsWith('ja')) return 'ja';
       if (s.startsWith('en')) return 'en';
+      // Every es-* region gets the same Spanish. The differences between them
+      // are real, but none of them fall inside the words a drawing tool needs.
+      if (s.startsWith('es')) return 'es';
       return null;
     })
     .find(Boolean);
