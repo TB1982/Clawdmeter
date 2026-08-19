@@ -42,8 +42,10 @@ running.
 
 ## 2. Draw or fix animations (optional)
 
-`anim_editor.html` is a 20×20 / 40×40 animation editor. Open it straight off
-disk — one file, no dependencies, no server, nothing fetched.
+`anim_editor.html` is a 20×20 / 40×40 / 60×60 animation editor. Open it straight
+off disk — one file, no dependencies, no server, nothing fetched. It speaks
+Español, English, 日本語, 繁體中文 and 简体中文, picked from the browser's own
+language and changeable at the top of the page.
 
 It carries what the firmware cares about rather than what a general pixel editor
 offers: the grid sizes the pipeline accepts and the 36-colour cap enforced,
@@ -423,8 +425,8 @@ this section still applies to the repository, just not to the device:
 
 **As of 2026-08-15 the published editor carries none of it either.**
 `build_editor_samples.js --public` writes `docs/anim_editor.html` with only the
-animations drawn here and Anthropic's imports — 27 of the 45 — and that is the
-copy GitHub Pages serves. `tools/anim_editor.html` keeps all 45 for local use.
+animations drawn here and Anthropic's imports — 33 of the 51 — and that is the
+copy GitHub Pages serves. `tools/anim_editor.html` keeps all 51 for local use.
 
 The distinction being drawn is between a file in a repository someone chooses to
 clone and a page served to whoever opens a link: the second is a distribution in

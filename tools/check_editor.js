@@ -218,6 +218,19 @@ console.log('\npublished copy:');
           leaked.length === 0);
     check(`published copy carries ${origins.length} animations (own + official)`,
           origins.length > 0);
+    // tools/README.md states both counts in prose, and prose does not rebuild.
+    // It read "27 of the 45" while the build was shipping 33 of 51, and had for
+    // long enough that the number had stopped being read as a claim about
+    // anything. A count written in two places is a count that will disagree; the
+    // only question is whether anything notices.
+    {
+      const readme = fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8');
+      const here = (html.match(/^\{n:"/gm) || []).length;
+      const pubN = (readme.match(/— (\d+) of the (\d+) —/) || []).slice(1).map(Number);
+      const allN = Number((readme.match(/keeps all (\d+) for local use/) || [])[1]);
+      check(`tools/README.md still states the real counts (${origins.length} of ${here})`,
+            pubN[0] === origins.length && pubN[1] === here && allN === here);
+    }
     // Same file otherwise: the public build must not become a stale fork of the
     // editor, only a different sample set.
     const strip = s => s.slice(0, s.indexOf('/*BEGIN-SAMPLES*/')) + s.slice(s.indexOf('/*END-SAMPLES*/'));
@@ -229,7 +242,7 @@ console.log('\npublished copy:');
   // moved to serve docs/ as the root. That URL is out in the world, so the path
   // has to keep answering — with a redirect, and only a redirect. If a build
   // ever wrote the editor there instead, the old URL would quietly go back to
-  // serving all 45 animations from the address people already have.
+  // serving every animation from the address people already have.
   const redirect = path.join(__dirname, '..', 'docs', 'tools', 'anim_editor.html');
   if (!fs.existsSync(redirect)) {
     check('the old editor URL still answers (docs/tools/anim_editor.html)', false);

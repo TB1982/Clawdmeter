@@ -56,6 +56,8 @@ The splash plays Anthropic's official Clawd art. It will also play whatever you 
 
 **→ [Clawdmeter animation editor](https://tb1982.github.io/Clawdmeter/tools/anim_editor.html)**
 
+It opens in Español, English, 日本語, 繁體中文 or 简体中文 — whichever your browser asks for, with a picker at the top to change it. That list is the editor's own: the device's screens are English.
+
 It carries what the firmware cares about rather than what a general pixel editor offers: the grid sizes the pipeline accepts, the palette cap enforced, per-frame hold times, onion skin, playback at the real holds, and both device previews on black — because a colour that looks fine on white can vanish on the panel, and a shape that reads at 24 px per cell can turn to mush at 4. Every animation in the catalogue is embedded as a loadable sample, so an existing one can be opened and altered rather than rebuilt from an empty grid.
 
 A frame fragment copied there goes onto the system clipboard as plain text, so it can be pasted into another frame, another document, or another program entirely. The format is written down in [`docs/animation-contract.md`](docs/animation-contract.md) for anyone who wants to read or write it.
