@@ -173,6 +173,26 @@ console.log('\nlocales:');
   check('every locale carries the same placeholders as English' +
         (drift.length ? ` — ${drift.join('; ')}` : ''), !drift.length);
 
+  // A fixed width on an element whose text gets replaced is a width chosen for
+  // whichever language was on screen when it was typed. The three labels in the
+  // animation panel were style="width:44px" — two CJK glyphs — and English has
+  // needed 63 for "Category" since the day it was written, so the label ran
+  // under the control next to it and the page quietly read "Categor". Nobody
+  // saw it because nobody reads a label they already know the meaning of.
+  //
+  // min-width and max-width are fine: they set a floor or a ceiling and let the
+  // text decide the rest. It is `width` that overrules the text.
+  {
+    const fixed = [...html.matchAll(/<[^>]*\bdata-i18n\b[^>]*>/g)]
+      .map(m => m[0])
+      .filter(tag => {
+        const st = (tag.match(/style="([^"]*)"/) || [])[1] || '';
+        return /(?<!min-)(?<!max-)width\s*:/.test(st);
+      });
+    check('no translated element has its width pinned' +
+          (fixed.length ? ` — ${fixed.join(' ')}` : ''), !fixed.length);
+  }
+
   // An empty string renders as a blank control, which is the failure the
   // fallback-to-English rule exists to avoid — except a present-but-empty key
   // never reaches the fallback, because it is present.

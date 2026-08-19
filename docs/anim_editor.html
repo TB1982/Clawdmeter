@@ -212,9 +212,16 @@
   <div class="col-io">
     <div class="panel">
           <h2 data-i18n="infoH">動畫資訊</h2>
-          <div class="row"><span style="width:44px" data-i18n="labelName">名稱</span>
+          <!-- min-width, not width. These three were 44px, which is two CJK
+               glyphs and nothing else: "Category" needs 63 and "Categoría" 71,
+               so the label ran under the control beside it and the English page
+               had been reading "Categor" since it was written. A fixed width on
+               a string that gets translated is a width chosen for one language.
+               min-width keeps the three controls lined up and lets a label that
+               outgrows it push instead of disappear. -->
+          <div class="row"><span style="min-width:76px" data-i18n="labelName">名稱</span>
             <input type="text" id="name" value="my anim" style="width:180px"></div>
-          <div class="row"><span style="width:44px" data-i18n="labelCat">分類</span>
+          <div class="row"><span style="min-width:76px" data-i18n="labelCat">分類</span>
             <select id="category">
               <option>Idle</option><option>Work</option>
               <option>Dance</option><option>Expressions</option>
@@ -223,7 +230,7 @@
                property of the animation, not a view setting. Changing it here
                rewrites every frame, which is why it is not next to the zoom-ish
                controls where someone would expect it to be harmless. -->
-          <div class="row"><span style="width:44px" data-i18n="labelSize">尺寸</span>
+          <div class="row"><span style="min-width:76px" data-i18n="labelSize">尺寸</span>
             <select id="gridsize">
               <option value="20">20 × 20</option>
               <option value="40">40 × 40</option>
