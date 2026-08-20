@@ -25,7 +25,7 @@ On a board with an IMU — the AMOLED-2.16 today — a quarter turn shows a thir
 
 |                          Weather                           |                         Stocks                          |
 | :--------------------------------------------------------: | :-----------------------------------------------------: |
-| <img src="screenshots/weather.gif" width="380" height="380" alt="Weather"> | <img src="screenshots/stocks.png" width="380" height="380" alt="Stocks"> |
+| <img src="screenshots/weather.gif" width="380" height="380" alt="Weather"> | <img src="screenshots/stocks.gif" width="380" height="380" alt="Stocks"> |
 |              Conditions, and the moon's phase              |          Your own tickers, and a coin           |
 
 The moon appears only while it is actually above the horizon, which is not the same thing as night. Quotes are red for up, the Taiwan convention and the opposite of the American one, and the coin keeps turning after the bell.
@@ -46,7 +46,7 @@ On a board with an IMU — the AMOLED-2.16 today — a quarter turn swaps what t
 
 The board does no networking of its own. The daemon fetches both and sends them in the same BLE write as the usage numbers, so there is no API key on the device, no Wi-Fi password in its flash, and no second radio competing with BLE HID for the 2.4 GHz band.
 
-Weather comes from [Open-Meteo](https://open-meteo.com) — no account, no key — at most once every ten minutes. The moon icon appears only while the moon is actually above the horizon, which is not the same thing as night. Clear, cloudy and rain each put a creature beside the temperature; the other six conditions keep the plain centred layout rather than borrow an animal that means a different sky, because the one thing this screen is for is saying what it is actually like outside. Quotes come from the Taiwan exchange's own endpoint and are labelled *at last close* outside 09:00–13:30 on weekdays, because for most of any day the number is not live and an unlabelled price is a quiet lie.
+Weather comes from [Open-Meteo](https://open-meteo.com) — no account, no key — at most once every ten minutes. The moon icon appears only while the moon is actually above the horizon, which is not the same thing as night. Clear, cloudy and rain each put a creature beside the temperature; the other six conditions keep the plain centred layout rather than borrow an animal that means a different sky, because the one thing this screen is for is saying what it is actually like outside. Quotes come from the Taiwan exchange's own endpoint and are labelled *at last close* outside 09:00–13:30 on weekdays, because for most of any day the number is not live and an unlabelled price is a quiet lie. The corner coin turns and the shower falls for as long as that screen is up, trading or not — whether the market is open is said by the line under the quotes, and a screen that only moves during market hours is a screen that is still for most of a day. Both are drawn on the device from fixed lanes rather than played back, so they cost nothing to send and look the same every run.
 
 Both are off until you set them. Copy [`daemon/config.example`](daemon/config.example) to your config file — it documents each key where you edit it. Your tickers stay in that file on your own machine: the device displays them, and nothing uploads them anywhere.
 

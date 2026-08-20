@@ -117,15 +117,34 @@ twenty shots 85 ms apart *is* the loop:
 SIM_SCRIPT="800:key:2,1200:key:r,2000:shot:s00.bmp,2085:shot:s01.bmp,…,3615:shot:s19.bmp,3915:quit" \
   SDL_VIDEODRIVER=dummy .pio/build/sim/program
 
-ffmpeg -framerate 12.5 -i s%02d.bmp -filter_complex \
-  "[0:v]split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=none" \
-  -loop 0 weather.gif
+ffmpeg -framerate 12.5 -i s%02d.bmp -i palette.bmp -filter_complex \
+  "[0:v][1:v]paletteuse=dither=none" -loop 0 weather.gif
 ```
 
-A whole screen is around 54 distinct colours — RGB565 through LVGL, not
-photography — so a GIF palette holds all of them and the result is
-pixel-identical to what the panel would draw. Worth checking rather than
-assuming: `cmp` the first GIF frame against the first BMP.
+**A screen with two moving parts loops on their common multiple, not on
+either.** The stocks screen is a 2400 ms coin band beside a 720 ms spinning
+coin, so it only repeats every 7200 ms — 48 shots at 150 ms. Capturing the
+band's 2400 ms alone would look right until the corner coin jumped a third of a
+turn at every wrap.
+
+Don't take the arithmetic on faith. Take one shot more than the loop and check
+that the extra one is byte-identical to the first: `cmp s00.bmp s48.bmp`. That
+proves the period rather than asserting it, and it costs one frame.
+
+A whole screen is well inside a GIF palette — 54 distinct colours for the
+weather screen, 81 for the stocks one, because this is RGB565 through LVGL and
+not photography. So the GIF can be exactly what the panel would draw.
+
+It is not exact by default. `palettegen` quantises even when the source has a
+third of the colours it is allowed, and on the stocks screen it merged (8,0,0)
+into (7,0,0) — 33 pixels of 230,400, invisible, and still not the same picture.
+Build the palette from the actual colours instead and `paletteuse` becomes a
+lookup: collect every distinct colour across the frames, assert there are 256 or
+fewer, and write them into a 16×16 BMP to pass as the second input.
+
+Then check **every** frame against its source, not the first. The first frame
+matching is what a merged pair of near-identical colours looks like when the
+merge lands somewhere else.
 
 Two things that will bite:
 
