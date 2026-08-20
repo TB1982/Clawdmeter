@@ -101,6 +101,63 @@ Builds, runs headless, appends the shot and quit steps, converts BMP → PNG.
 `--at <ms>` moves the shot, which is also how you pick *which frame* of an
 animation you capture.
 
+### Capturing a screen that moves
+
+A still cannot show the weather screen, because most of what is new about it is
+the creature. `export_gif.js` is no help either — it renders an animation on its
+own, and this is a composed screen: title, moon, battery, temperature, creature.
+So the frames come off the simulator and are assembled afterwards.
+
+Space the shots at the animation's own hold and take exactly one loop's worth,
+and the GIF closes seamlessly with no editing. `rainy` is 20 frames at 85 ms, so
+twenty shots 85 ms apart *is* the loop:
+
+```bash
+# 2 = the scenario entry with wx 63, r = a quarter turn to the weather screen
+SIM_SCRIPT="800:key:2,1200:key:r,2000:shot:s00.bmp,2085:shot:s01.bmp,…,3615:shot:s19.bmp,3915:quit" \
+  SDL_VIDEODRIVER=dummy .pio/build/sim/program
+
+ffmpeg -framerate 12.5 -i s%02d.bmp -i palette.bmp -filter_complex \
+  "[0:v][1:v]paletteuse=dither=none" -loop 0 weather.gif
+```
+
+**A screen with two moving parts loops on their common multiple, not on
+either.** The stocks screen is a 2400 ms coin band beside a 720 ms spinning
+coin, so it only repeats every 7200 ms — 48 shots at 150 ms. Capturing the
+band's 2400 ms alone would look right until the corner coin jumped a third of a
+turn at every wrap.
+
+Don't take the arithmetic on faith. Take one shot more than the loop and check
+that the extra one is byte-identical to the first: `cmp s00.bmp s48.bmp`. That
+proves the period rather than asserting it, and it costs one frame.
+
+A whole screen is well inside a GIF palette — 54 distinct colours for the
+weather screen, 81 for the stocks one, because this is RGB565 through LVGL and
+not photography. So the GIF can be exactly what the panel would draw.
+
+It is not exact by default. `palettegen` quantises even when the source has a
+third of the colours it is allowed, and on the stocks screen it merged (8,0,0)
+into (7,0,0) — 33 pixels of 230,400, invisible, and still not the same picture.
+Build the palette from the actual colours instead and `paletteuse` becomes a
+lookup: collect every distinct colour across the frames, assert there are 256 or
+fewer, and write them into a 16×16 BMP to pass as the second input.
+
+Then check **every** frame against its source, not the first. The first frame
+matching is what a merged pair of near-identical colours looks like when the
+merge lands somewhere else.
+
+Two things that will bite:
+
+**`SIM_SCRIPT` is parsed through a 1024-byte buffer.** Twenty shots with
+absolute paths overrun it, and what falls off the end is silently dropped —
+including `quit`, so the run appears to hang instead of failing. Use short
+relative names (the program's own directory is the working directory) and read
+the `[sim] SIM_SCRIPT: N steps` line it prints to confirm N is what you wrote.
+
+**GIF delays are whole centiseconds**, so an 85 ms hold becomes 80 and the loop
+plays about 6% fast. Invisible on rain; worth knowing before matching a GIF
+against a stopwatch.
+
 ## Caveat
 
 The sim mirrors the S3 2.16 geometry but renders with desktop LVGL and fake

@@ -86,7 +86,13 @@ static void key_up(SDL_Keycode k) {
 //
 // A tap is held TAP_HOLD_MS so LVGL sees a press and a release on separate
 // frames; overlapping taps just extend the hold.
-#define SIM_SCRIPT_MAX 32
+// 32 was enough while a script meant "get to a screen and take one picture".
+// Capturing a screen that moves needs one shot per frame of its loop, and a
+// screen with two moving parts loops on their common multiple: the stocks
+// screen is a 2400 ms coin band beside a 720 ms coin, so it repeats every
+// 7200 ms and takes 48 shots at 150 ms to cover once. This costs 9 KB of
+// static memory in a desktop binary; the firmware never compiles this file.
+#define SIM_SCRIPT_MAX 64
 #define TAP_HOLD_MS    120
 
 typedef struct {
@@ -110,8 +116,15 @@ static void script_parse(void) {
     const char* env = getenv("SIM_SCRIPT");
     if (!env || !*env) return;
 
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "%s", env);
+    char buf[2048];
+    // snprintf truncates instead of failing, and what falls off the end of a
+    // long script is its tail — the last shots and `quit`. Losing `quit` reads
+    // as the simulator hanging rather than as a script that was too long, so
+    // the one thing this must not do is stay quiet about it. Twenty shots with
+    // absolute paths is enough to overrun this.
+    if (snprintf(buf, sizeof(buf), "%s", env) >= (int)sizeof(buf))
+        fprintf(stderr, "[sim] SIM_SCRIPT is longer than %zu bytes and was cut "
+                        "short — use shorter shot paths\n", sizeof(buf));
     for (char* tok = strtok(buf, ","); tok && script_len < SIM_SCRIPT_MAX;
          tok = strtok(NULL, ",")) {
         while (*tok == ' ') tok++;
