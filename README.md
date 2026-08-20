@@ -36,7 +36,7 @@ Everything above is [HermannBjorgvin/Clawdmeter](https://github.com/HermannBjorg
 
 ### Turn the device
 
-<img src="assets/readme/rainy_days.gif" width="140" align="right" alt="">
+<img src="assets/readme/jumping_blossom.gif" width="140" align="right" alt="">
 
 On a board with an IMU — the AMOLED-2.16 today — a quarter turn swaps what the screen shows, and turning back restores what you were looking at:
 
