@@ -299,7 +299,7 @@ One gotcha, paid for once: the flags are read as integers, not booleans. Arduino
 
 ## Development
 
-<img src="assets/readme/crab.gif" width="120" align="right" alt="">
+<img src="assets/readme/this_is_fine.gif" width="120" align="right" alt="">
 
 - **Desktop simulator** — iterate on the UI without hardware: an SDL2 window
   runs the full firmware loop with scenario playback (`pio run -d firmware -e
