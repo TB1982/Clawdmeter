@@ -17,8 +17,10 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
+from typing import NamedTuple
 
 import httpx
 from bleak import BleakClient
@@ -56,8 +58,9 @@ API_BODY = {
 
 class TokenExpired(Exception):
     """Raised by poll_api on a 401/403 — the access token is dead. The daemon never
-    refreshes (pure free-ride: Claude Code owns refreshing), so the caller just
-    signals "No data" to the device until the CLI re-seeds the token."""
+    mints or writes a token itself (pure free-ride: Claude Code owns refreshing).
+    After a few of these in a row it may *nudge* Claude Code to do its own refresh
+    (see TokenRenewer); failing that, the caller signals "No data" to the device."""
 
 
 def log(msg: str) -> None:
@@ -187,6 +190,189 @@ def read_token_for(config_dir: Path) -> str | None:
     if sys.platform == "darwin" and config_dir == DEFAULT_CONFIG_DIR:
         return _read_token_keychain()
     return None
+
+
+# ---------------------------------------------------------------------------
+# Token renewal — nudging the owner, not refreshing ourselves
+#
+# The free-ride contract stands: this daemon never mints, rotates, or writes a
+# credential. A previous version did refresh client-side and was removed for
+# good reasons (refresh-token rotation racing Claude Code, 429-bucket
+# exhaustion); daemon/tests/test_freeride.py still fails the build if any of
+# that machinery comes back.
+#
+# What the contract did not cover is the token expiring while nobody happens to
+# be running Claude Code. The poll then 401s once a minute and the device sits
+# on its "No data" screen until a session starts by coincidence. Observed on
+# 2026-08-25: 53 consecutive {"ok":false} beats, cleared the instant a session
+# opened. Nothing was broken — the owner was simply asleep.
+#
+# So: after a few 401s in a row, run a *Claude Code* command and let it do its
+# own refresh, exactly as an interactive session would. Then re-read the stored
+# token and see whether it actually changed. That check is the design. We can't
+# know from here which command triggers a refresh (the cheap one may only read
+# local state), so the daemon tries the cheap one first, escalates, and reports
+# in the log which one moved the token. At the next real expiry the log says
+# what happened rather than leaving it to guesswork.
+#
+# Cost note: the escalation step is a real (tiny, Haiku) Claude Code turn, so it
+# nudges the usage number the device is displaying. That is why it runs second,
+# behind a streak threshold and a cooldown, and never on the first failure.
+
+RENEW_MODEL = API_BODY["model"]          # cheapest model on any plan
+RENEW_TIMEOUT = 90.0                     # per command; a stuck CLI must not hang us
+RENEW_CANDIDATE_BINS = (
+    "/opt/homebrew/bin/claude",
+    "/usr/local/bin/claude",
+    str(Path.home() / ".local" / "bin" / "claude"),
+    str(Path.home() / ".claude" / "local" / "claude"),
+)
+
+
+class RenewPolicy(NamedTuple):
+    enabled: bool
+    after: int        # consecutive 401s before the first nudge
+    cooldown: float   # seconds between nudges, so a dead login isn't hammered
+
+
+def read_renew_setting() -> RenewPolicy:
+    """Read the `token_renew*` options from the config file.
+
+    Defaults to on (after 3 consecutive 401s, at most one nudge per 15 min).
+    Unlike chime/clock/weather this defaults *on*: it does nothing at all until
+    the daemon is already failing, and the failure it clears is invisible from
+    the device. `token_renew = off` restores the strict do-nothing behavior.
+    """
+    enabled, after, cooldown = True, 3, 900.0
+    try:
+        if CONFIG_FILE.exists():
+            for line in CONFIG_FILE.read_text().splitlines():
+                line = line.split("#", 1)[0].strip()
+                if "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                key, val = key.strip().lower(), val.strip().lower()
+                if key == "token_renew" and val in ("off", "on"):
+                    enabled = val == "on"
+                elif key == "token_renew_after":
+                    try:
+                        after = max(1, int(val))
+                    except ValueError:
+                        pass
+                elif key == "token_renew_cooldown":
+                    try:
+                        cooldown = max(0.0, float(val))
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return RenewPolicy(enabled, after, cooldown)
+
+
+def _claude_binary() -> str | None:
+    """Absolute path to the Claude Code CLI, or None.
+
+    PATH under launchd is not the PATH in a login shell — /opt/homebrew/bin is
+    routinely missing — so which() alone would work when tested by hand and fail
+    in the plist. The explicit candidates cover the installers we know about.
+    """
+    found = shutil.which("claude")
+    if found:
+        return found
+    for cand in RENEW_CANDIDATE_BINS:
+        if os.access(cand, os.X_OK):
+            return cand
+    return None
+
+
+def _renew_commands(binary: str) -> list[list[str]]:
+    """Commands to try, cheapest first. Both are ordinary Claude Code entry
+    points; neither is `auth login`, which wants a browser and a human."""
+    return [
+        [binary, "auth", "status"],
+        [binary, "-p", "--model", RENEW_MODEL, "reply with exactly: ok"],
+    ]
+
+
+def _run_renew(cmd: list[str], config_dir: Path) -> int:
+    """Run one renewal command headlessly. Returns its exit code (-1 if it
+    couldn't run at all).
+
+    cwd is a scratch dir, not a project: Claude Code started inside a repo can
+    stop on a trust prompt, and a daemon has no one to answer it.
+    """
+    env = dict(os.environ)
+    if config_dir != DEFAULT_CONFIG_DIR:
+        env["CLAUDE_CONFIG_DIR"] = str(config_dir)
+    try:
+        out = subprocess.run(
+            cmd,
+            cwd=tempfile.gettempdir(),
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=RENEW_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        log(f"Token renewal: `{' '.join(cmd[1:])}` timed out after {RENEW_TIMEOUT:.0f}s")
+        return -1
+    except OSError as e:
+        log(f"Token renewal: cannot run {cmd[0]}: {e}")
+        return -1
+    if out.returncode != 0:
+        log(f"Token renewal: `{' '.join(cmd[1:])}` exited {out.returncode}: "
+            f"{(out.stderr or '').strip()[:160]}")
+    return out.returncode
+
+
+class TokenRenewer:
+    """Per-config-dir 401 streaks, and the nudge that may clear them."""
+
+    def __init__(self) -> None:
+        self.streak: dict[Path, int] = {}
+        self.last_attempt: dict[Path, float] = {}
+
+    def note_ok(self, config_dir: Path) -> None:
+        self.streak.pop(config_dir, None)
+
+    async def on_expired(self, config_dir: Path) -> str | None:
+        """Count this 401 and, once it's worth it, nudge. Returns a *new* token
+        when the stored one actually changed, else None."""
+        streak = self.streak.get(config_dir, 0) + 1
+        self.streak[config_dir] = streak
+        policy = read_renew_setting()
+        if not policy.enabled or streak < policy.after:
+            return None
+        now = time.monotonic()
+        last = self.last_attempt.get(config_dir)
+        if last is not None and now - last < policy.cooldown:
+            return None
+        self.last_attempt[config_dir] = now
+        return await asyncio.to_thread(self._nudge, config_dir, streak)
+
+    def _nudge(self, config_dir: Path, streak: int) -> str | None:
+        binary = _claude_binary()
+        if binary is None:
+            log("Token renewal: no `claude` CLI found; run `claude login` yourself")
+            return None
+        before = read_token_for(config_dir)
+        log(f"Token renewal: {streak} consecutive 401s for {config_dir}; "
+            f"nudging {binary}")
+        for cmd in _renew_commands(binary):
+            _run_renew(cmd, config_dir)
+            after = read_token_for(config_dir)
+            if after and after != before:
+                log(f"Token renewal: `{' '.join(cmd[1:])}` refreshed the token")
+                return after
+            log(f"Token renewal: `{' '.join(cmd[1:])}` left the token unchanged")
+        log("Token renewal: nothing refreshed it — the login itself is likely "
+            "dead; run `claude login`")
+        return None
+
+
+# Module-level so streaks and cooldowns survive BLE reconnects, like _SELECTOR.
+_RENEWER = TokenRenewer()
 
 
 def load_cached_address() -> str | None:
@@ -831,7 +1017,9 @@ async def poll_active(selector: PlanSelector = _SELECTOR) -> tuple[dict | None, 
     transient non-auth poll failure worth retrying silently rather than idling.
 
     Pure free-ride: a 401 (TokenExpired) means that dir's token has expired and
-    only Claude Code (its owner) can re-seed it — we never refresh it ourselves.
+    only Claude Code (its owner) can re-seed it — we never mint one ourselves.
+    After a streak of them we ask the owner to (see TokenRenewer) and retry once
+    with whatever it left behind.
     """
     dirs = read_config_dirs()
     payloads: dict[Path, dict] = {}
@@ -845,8 +1033,16 @@ async def poll_active(selector: PlanSelector = _SELECTOR) -> tuple[dict | None, 
         try:
             payload = await poll_api(token)
         except TokenExpired:
-            log(f"Token in {d} expired/invalid; skipping")
-            continue
+            renewed = await _RENEWER.on_expired(d)
+            if renewed is None:
+                log(f"Token in {d} expired/invalid; skipping")
+                continue
+            try:
+                payload = await poll_api(renewed)
+            except TokenExpired:
+                log(f"Token in {d} still rejected after renewal; skipping")
+                continue
+        _RENEWER.note_ok(d)
         # Authenticated: a transient None here isn't an auth failure, so the
         # dir counts as live and we stay silent rather than idling the device.
         any_live = True

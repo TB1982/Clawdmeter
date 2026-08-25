@@ -17,6 +17,29 @@
 #   - install.sh can detect your ~/.claude* dirs and fill this in for you.
 # config_dirs = ~/.claude, ~/.claude-work
 
+# What to do when the OAuth token expires while you're not using Claude Code
+# (macOS daemon only, for now). The daemon never refreshes a token itself — but
+# after a few 401s in a row it can run a Claude Code command and let Claude Code
+# do its own refresh, the same thing that happens when you open a session. If
+# the stored token changes, the poll retries immediately; if it doesn't, the
+# daemon says so in the log and goes back to signalling "No data".
+#
+# Without this the device can sit on "No data" for hours — not because anything
+# broke, but because the only thing that renews the token is you happening to
+# start a session.
+#
+# The escalation step is a real (tiny, Haiku) Claude Code turn, so it moves your
+# usage number by a hair. Hence the streak threshold and the cooldown: a login
+# that is genuinely dead gets nudged four times an hour at most, not sixty.
+#
+#   on  = nudge Claude Code to refresh (default)
+#   off = never run anything; just show "No data" until you run `claude login`
+token_renew = on
+# Consecutive 401s before the first nudge. 1 would spend a turn on every blip.
+token_renew_after = 3
+# Seconds between nudges while the token stays dead.
+token_renew_cooldown = 900
+
 # Play a sound on the device when your 5-hour session limit resets, so you know
 # you can use Claude again without watching the screen.
 #   off = silent (default)
