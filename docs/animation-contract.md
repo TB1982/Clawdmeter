@@ -11,8 +11,9 @@ disagreement is only noticed by whoever is holding the hardware. Every claim
 below carries the file and line it came from, so the doc can be checked against
 the code rather than trusted.
 
-Written 2026-08-13. Sections marked **stable** are contract; sections marked
-**may move** are current fact and could change with a firmware release.
+Written 2026-08-13, re-checked line by line against the tree on 2026-09-05.
+Sections marked **stable** are contract; sections marked **may move** are
+current fact and could change with a firmware release.
 
 ---
 
@@ -44,13 +45,49 @@ between them has to go via 20, and 40 → 20 discards detail.
 one base-36 character; index 35 (`'z'`) is the largest that survives the round
 trip. Above that the real ceiling is 255, since cells are `uint8_t`.
 
+### Which layer each of these refusals actually lives in
+
+Asked by VAS on 2026-09-07, while mapping which limits are hardware and which
+are ours. Worth answering in the file: getting the attribution wrong sends the
+next person to argue with the wrong party.
+
+| the rule | what refuses | what the device itself does |
+|---|---|---|
+| palette ≤ 36 | `build_editor_samples.js:140` — the base-36 packing, and the only thing here actually shaped like 36. Mirrored in `anim_editor.html:408`, validated in `convert_to_c.js:182` | nothing hardcodes it. `convert_to_c.js:315` emits `SPLASH_PALETTE_SIZE` from `format.js` and `splash.cpp` bounds-checks against that define (`:309`, `:376`, `:443`) |
+| side ∈ {20, 40, 60} | `convert_to_c.js:192` | no whitelist at all. `render_frame()` reads `a->grid`, derives `cell = canvas_w / grid` and centres the remainder (`splash.cpp:367`) |
+
+**Both are toolchain walls.** Neither number is a device capability, and the
+"whole multiple of 20" rule in the paragraph above is about resizing being free
+between the listed sizes — not about what the panel can show.
+
+To raise the palette cap: change `format.js`, then the packing and its reader.
+That pair is the whole job; the converter and the firmware are already
+parameterised, and every palette is padded to the cap regardless of use, so each
+added entry costs 2 bytes per animation and nothing else.
+
+A side the converter never saw would render. On a 480 panel, 30 is exactly 16 px
+per cell; 25 is 19 px with a 5 px margin left as background rather than a
+silently shifted image. **The wall stands at the canvas edge**, and there it
+stops being a toolchain wall: `canvas_w` is `SPLASH_GRID * (min(W, H) /
+SPLASH_GRID)` — 480, 400, 360 or 240 depending on the board — and past it `cell`
+clamps to 1, `side` outgrows the buffer, `off` goes negative, and
+`render_frame()` writes outside `canvas_buf` and `row_buf` (`splash.cpp:381`).
+There is no runtime guard on the full-screen path; `convert_to_c.js` is the
+guard. Mini instances are the exception — every write there is bounds-checked
+(`splash.cpp:446`, `:450`), which is why the compact badge crops a 60 instead of
+corrupting the heap. It did corrupt it until 2026-08-13 (§ 3).
+
+So: "the converter refuses it" is the honest answer for any side up to the
+canvas edge, and "the device breaks, unguarded" for anything past it.
+
 ### The copies, and which of them are checked
 
 `anim_editor.html` cannot `require()` anything — it has to open from `file://`
 as a single document, which is the property the whole editor is built around. So
-it keeps its own `PALETTE_MAX` and `GRID_SIZES`, and `build_editor_samples.js`
-compares them against `format.js` on every run and refuses to write if they
-disagree.
+it keeps its own `PALETTE_MAX`, `GRID_SIZES`, `CLIP_VERSION` and `HOLD_MIN`, and
+two things compare them against `format.js`: `build_editor_samples.js` refuses to
+write when they disagree, and `node tools/check_editor.js` checks the same four
+constants, the resize rules between grid sizes, and § 6 of *this document*.
 
 **That check only covers this repository's copy.** It reads
 `anim_editor.html`; it cannot see a reimplementation.
@@ -101,17 +138,24 @@ that neither the `screenshot` serial command nor a host test can check
 attached rather than letting it render wrong.
 
 **What this means for a downstream editor**: a user drawing 40 or 60 is
-producing something the four S3 boards render correctly and the two C6 boards
-cannot be built with at all. If any of your users have a C6 board, that is worth
-saying in the UI at the point of choosing a size — the failure is a build error
-on someone else's machine, not something their drawing will reveal.
+producing something every board that declares `BOARD_HAS_PSRAM` renders correctly
+and every board without it cannot be built with at all. Today that is the four S3
+ports plus the desktop simulator on one side and the two C6 ports on the other,
+but the membership is not the rule — the flag is. (Upstream added a fifth S3
+port, ESP32-S3-Touch-LCD-4, on 2026-08-27; it is 480×480 with 8 MB PSRAM, so it
+would join the first group and change nothing here. Not merged into this tree as
+of 2026-09-05.)
+
+If any of your users have a C6 board, that is worth saying in the UI at the point
+of choosing a size — the failure is a build error on someone else's machine, not
+something their drawing will reveal.
 
 Lifting it means wiring per-animation `lv_image_set_scale` and verifying on real
 C6 hardware. Until then, treat "20 only" as the C6 contract.
 
 ---
 
-## 3. Where an animation is drawn, and what 60 does in each slot
+## 3. Where an animation is drawn, and what a non-dividing size does there
 
 **may move** — the pixel sizes are layout values and could change with a new
 board or a layout revision. The *rule* is stable; the numbers are current fact.
@@ -119,9 +163,14 @@ board or a layout revision. The *rule* is stable; the numbers are current fact.
 An animation appears in one of two kinds of place:
 
 - **Full-screen splash** — the whole panel. Every size works.
-- **A mini instance** — the corner badge on the usage screen, and the creature
-  on the waiting/idle panel. Created by `splash_mini_create(parent, name, px)`
-  (`firmware/src/splash.cpp:459`).
+- **A mini instance** — a small canvas somewhere in the UI. Created by
+  `splash_mini_create(parent, name, px)` (`firmware/src/splash.cpp:459`).
+
+There are five mini instances today, in three slot geometries. Three of them
+share the top-left logo slot, one per screen: the rate-following corner badge
+(`ui.cpp:1061`, created with `NULL` so it picks by usage rate), the market coin
+(`ui.cpp:629`) and the moon (`ui.cpp:849`). The other two are the idle creature
+(`ui.cpp:549`) and the weather creature (`ui.cpp:810`).
 
 A mini snaps its canvas to a multiple of the *reference* grid, not to the
 animation's:
@@ -139,37 +188,48 @@ m->cell = m->w / m->grid;
 if (m->cell < 1) m->cell = 1;
 ```
 
-So a size divides a mini cleanly only when it divides `m->w`. The four slots
-that exist today:
+So a size divides a mini cleanly only when it divides `m->w`. The six
+slot-and-layout combinations that exist today:
 
 | slot | requested px | actual `m->w` | 20×20 | 40×40 | 60×60 |
 |---|---|---|---|---|---|
-| corner badge, large layout | 80 (`logo.h:4`) | 80 | fills | fills | whole, 60 of 80 px |
-| corner badge, compact layout | 40 (`logo.h:1210`) | 40 | fills | fills | **cropped — middle 40×40 only** |
-| waiting panel, large layout | 160 (`ui.cpp:104`) | 160 | fills | fills | whole, 120 of 160 px |
-| waiting panel, compact layout | 96 (`ui.cpp:168`) | **80** | fills | fills | whole, 60 of 80 px |
+| logo slot, large layout | 80 (`logo.h:4`) | 80 | fills | fills | whole, 60 of 80 px |
+| logo slot, compact layout | 40 (`logo.h:1210`) | 40 | fills | fills | **cropped — middle 40×40 only** |
+| idle creature, large layout | 160 (`ui.cpp:122`) | 160 | fills | fills | whole, 120 of 160 px |
+| idle creature, compact layout | 96 (`ui.cpp:201`) | **80** | fills | fills | whole, 60 of 80 px |
+| weather creature, large layout | 300 (`ui.cpp:127`) | 300 | fills | whole, 280 of 300 px | fills |
+| weather creature, compact layout | 180 (`ui.cpp:203`) | 180 | fills | whole, 160 of 180 px | fills |
 
 "whole" means every cell is drawn, centred, at a smaller size. "cropped" means
 cells outside the buffer are discarded — see the second bullet below.
 
-Three things to read off that table, and the first two are different failures:
+Four things to read off that table, and the first two are different failures:
 
-- **60 renders undersized in three of the four slots.** The whole frame is
+- **60 renders undersized in the logo and idle slots.** The whole frame is
   drawn, centred on a black field, at 75% of the slot or less. Nothing is
   missing; it is just small.
-- **In the fourth it is cropped, and content is lost.** The compact badge has
+- **In the compact logo slot it is cropped, and content is lost.** There
   `m->w = 40`, so `40 / 60` truncates to 0 and the clamp lifts the cell to 1 —
   a 60-cell span into a 40 px canvas. The outer 10 cells on every side fall
   outside the buffer and are skipped, leaving **the middle 40×40 of a 60×60
   frame**. Anything drawn near the edges is simply not there. (Before
-  2026-08-13 this case overflowed the heap instead; see below.)
-- **96 becomes 80.** `96 / 20` truncates to 4, so the compact waiting panel is
+  2026-08-13 this case overflowed the heap instead; see below.) Only the corner
+  badge can reach this: it is the one instance that picks by rate, and group 3
+  holds three 60×60 animations. The coin and the moon are both 20×20 and pinned
+  by name.
+- **The weather slot inverts it.** `weather_anim_px` is a whole multiple of 60
+  on purpose (`ui.cpp:124`) because all three weather creatures — `sunny`,
+  `cloud`, `rainy` — are 60×60. So in that slot 60 fills and **40** is the size
+  that lands short. Which size is awkward is a property of the slot, not of the
+  size.
+- **96 becomes 80.** `96 / 20` truncates to 4, so the compact idle creature is
   really 80 px. That surprises people; it is the same integer division.
 
-**So: treat 60 as splash-only.** It is not rejected and nothing crashes, so if
-your UI lets a user assign an animation to the badge or the waiting panel, 60 is
-the size to disallow there — the device will not tell them, and on one of the
-four slots it will quietly discard the edges of their drawing.
+**So: 60 is safe on the splash and in the slot built for it, and lossy in the
+compact logo slot.** Nothing is rejected and nothing crashes, so if your UI lets
+a user assign an animation to a particular slot, that is a check only you can
+make — the device will not tell them, and in one slot it will quietly discard the
+edges of their drawing.
 
 The renderer scales by whole-cell block fill, which is why a non-dividing size
 has nowhere to go. Sampling per output pixel instead (`src = y * grid / w`)
@@ -177,8 +237,9 @@ would draw every size whole in every slot and is identical to block fill
 wherever the sizes already divide — it is the fix that would retire this whole
 section. It has not been done.
 
-Compact layout is `H < 460`, which today means the 1.8 (368×448) and the 1.54
-(240×240).
+Compact layout is `H < 460` (`ui.cpp:139`), which today means the 1.8 in both
+its S3 and C6 forms (368×448) and the 1.54 (240×240). The 2.06 is 410×502, so
+despite being the smallest panel by area it takes the large layout.
 
 ### Previously: the 40 px badge overflowed the heap
 
@@ -192,7 +253,7 @@ bytes past the end of the allocation**. It was reachable: the badge is a
 rate-following instance, group 3 holds three 60×60 animations (`cloud`,
 `racing car`, `trumpet`), and `splash_mini_tick()` renders without checking
 visibility, so hiding the badge did not avoid it. Writes are now centred and
-bounded.
+bounded (`splash.cpp:437`).
 
 ---
 
@@ -200,7 +261,8 @@ bounded.
 
 **stable**
 
-`convert_to_c.js:290` emits it into the struct, so it is in the shipped binary:
+`convert_to_c.js` declares the field (`:319`) and writes it (`:375`), so it is
+in the shipped binary:
 
 ```c
 // firmware/src/splash_animations.h:17
@@ -222,10 +284,16 @@ only current use.
 **So a wrong category costs nothing on the device.** Do not gate saving on it.
 
 The editor's dropdown offers `Idle`, `Work`, `Dance`, `Expressions`
-(`anim_editor.html:214`), while the shipped catalogue also contains `Official`
-(16 animations). That gap is drift, not policy — the dropdown was not updated
-when the official art was imported. Deriving the list from the distinct values
-present, rather than hardcoding four, is the version that will not drift again.
+(`anim_editor.html:227`). The shipped catalogue, on 2026-09-05, uses six:
+`Official` (15), `Idle` (6), `Dance` (3), `Weather` (3), `Work` (2) and
+`Stocks` (1) — and contains no `Expressions` at all, which survives only among
+the editor's own samples. So the two lists disagree in **both** directions: the
+dropdown is missing three categories that ship, and offers one that does not.
+
+That gap is drift, not policy — the dropdown was not updated when the official
+art was imported, nor when the weather and stocks screens brought their own.
+Deriving the list from the distinct values present, rather than hardcoding four,
+is the version that will not drift again.
 
 One distinction worth preserving in a user-facing picker: `Official` records
 **provenance** ("this came from Anthropic"), not a kind of motion. A user filing
@@ -238,12 +306,14 @@ It is not in `splash_anim_def_t` at all — `convert_to_c.js` never emits it, so
 unlike `category` it does not even reach the binary. `build_editor_samples.js`
 does not pack it either, so the editor's samples do not carry one.
 
-Five tools **write** it (`grid_image_to_anim.js`, `make_custom_anims.js`,
-`import_official.js`, `makebead_to_anim.js`, and the editor itself) and nothing
-anywhere reads it.
+Nine tools **write** it — `grid_image_to_anim.js`, `make_custom_anims.js`,
+`import_official.js`, `makebead_to_anim.js`, `make_moon_phases.js`,
+`make_coin_rain.js`, `make_coin_spin.js`, `make_rain_anim.js`, and the editor
+itself — and nothing anywhere reads it. It was five when this was written on
+2026-08-13; the number only ever goes up, which is the point.
 
 The part that matters for a downstream editor: **ours overwrites it on every
-export** with a fixed string (`anim_editor.html:1612`):
+export** with a fixed string (`anim_editor.html:1992`):
 
 ```js
 description: `Drawn in the Clawdmeter editor: ${frames.length} frames.`,
@@ -270,13 +340,19 @@ An animation is only ever shown if some name in the firmware matches its `name`
 field exactly. Adding a JSON is not enough — this is the most common way a new
 animation silently never appears.
 
-- `GROUP_NAMES[4][9]` in `firmware/src/splash.cpp` — the rate groups
-- `SPLASH_OPENING_ANIM` — played once per power-up, not reachable otherwise
-- `SPLASH_CELEBRATE_ANIM` — the reset celebration
-- `ui.cpp` names one animation directly for the waiting panel
+- `GROUP_NAMES[4][9]` in `firmware/src/splash.cpp:83` — the rate groups
+- `SPLASH_OPENING_ANIM` (`splash.cpp:195`) — played once per power-up, not
+  reachable otherwise
+- `SPLASH_CELEBRATE_ANIM` (`splash.cpp:207`) — the reset celebration
+- `ui.cpp` names six directly: `magnifier` (the idle creature), `market coin`,
+  `moon phases`, and one per weather condition (`sunny`, `cloud`, `rainy`)
 
 `node tools/check_groups.js` verifies every name the firmware asks for exists in
-the build. Run it after any rename.
+the build, and prints the current lists rather than making you read for them —
+so it, not this section, is the answer to "what does the firmware ask for
+today". It also reports built animations that nothing ever picks.
+`tools/sync_animations.js` runs it as its last step; run it directly after any
+rename or any hand-edit of `GROUP_NAMES`.
 
 ## 6. Constants a downstream consumer may need
 
@@ -286,11 +362,12 @@ the build. Run it after any rename.
 |---|---|---|
 | `SPLASH_ROTATE_INTERVAL_MS` | 20000 | `splash.cpp:57` |
 | `SPLASH_GRID` | 20 | `splash_geometry.h:15` |
-| `SPLASH_GRID_MAX` | generated | `splash_animations.h` |
+| `SPLASH_GRID_MAX` | generated — 60 today | `splash_animations.h:978` |
+| `SPLASH_ANIM_COUNT` | generated — 30 today | `splash_animations.h:977` |
 | `SPLASH_PALETTE_SIZE` | 36 | generated from `format.js` |
 | rate groups × slots | 4 × 9 | `splash.cpp:63` |
-| `CLIP_VERSION` | 1 | `tools/lib/format.js` (see § 7) |
-| `HOLD_MIN_MS` | 20 | `tools/lib/format.js` (see below) |
+| `CLIP_VERSION` | 1 | `tools/lib/format.js:65` (see § 7) |
+| `HOLD_MIN_MS` | 20 | `tools/lib/format.js:91` (see below) |
 
 **Frame holds.** A hold is a whole number of milliseconds, at least `HOLD_MIN_MS`.
 There is no upper bound below 65,535 — holds compile into a `uint16_t[]`.
@@ -307,14 +384,33 @@ convention, because both fail far from their cause:
   full-canvas flush. A hold shorter than a pass yields the pass, not the hold.
 
 The floor is **not** a granularity. Any whole value at or above it is exact, and
-that matters: several animations scraped from claudepix run on 1/12-second beats
-(83, 166, 332, 498 ms), which rounding to any coarser step would destroy. The
-editor's hold field carries `step="20"` for its arrow buttons only — a typed 310
-stays 310.
+that matters: across the 796 frames shipped on 2026-09-05, fifteen distinct hold
+values are not multiples of 20 — including the 1/12-second beats the GIF-sourced
+art runs on (83, 166, 332, 498 ms), which rounding to any coarser step would
+destroy. The editor's hold field carries `step="20"` for its arrow buttons only
+— a typed 310 stays 310. The shortest hold actually in the tree is 70 ms, three
+and a half times the floor.
+
+**Two unrelated 20s, and do not let one stand in for the other.** This floor
+comes from the poll loop and a `uint16_t`; an editor's arrow-button step comes
+from what feels good under a thumb. Ours are both 20 and they are separate
+constants — `check_editor.js` asserts the hold field reads
+`inp.min = HOLD_MIN; inp.step = 20;`, so the day either moves, the other does
+not follow silently. VAS reached this floor from the step side on 2026-09-05:
+right value, wrong reason, and nothing anywhere could have noticed. If your
+editor has a step constant that happens to equal 20, that is a coincidence —
+mirror this row, not that one.
 
 A frame costs `side * side` bytes of flash: 400 at 20, 1,600 at 40, 3,600 at 60.
 A 25-frame animation is 10 KB, 40 KB or 90 KB. Fine for a few, not for all — the
-current catalogue is 26 animations at 84.8% of a 3,342,336-byte partition.
+current catalogue is 30 animations, and the 2.16 build measures 2,936,363 bytes
+against a 6,553,600-byte app partition, 44.8% (built 2026-09-05).
+
+That percentage was 84.8% here on 2026-08-13 and the budget did not triple: the
+env inherited `board = esp32-s3-devkitc-1`'s 8 MB flash layout by declaring
+nothing, so it was being measured against a 3.34 MB app0 that did not match the
+16 MB part on the desk. Fixed 2026-08-17. **A headroom figure copied out of this
+document is a figure about our partition table, not about yours.**
 
 ---
 
@@ -419,3 +515,15 @@ separate objects.
 If a number here is wrong, the file and line beside it is where to look, and
 fixing this file is part of the change that made it wrong. Nothing here is
 generated, so nothing regenerates it.
+
+Two of the numbers do fail loudly, though. `tools/check_editor.js` reads this
+file and asserts that § 6's table states the current `CLIP_VERSION` and
+`HOLD_MIN_MS`, because those two are the ones a consumer mirrors by regexing
+*this document* rather than our source — a bump that stops at the code is a bump
+they never hear about. The rest are checked the way everything else here is:
+by someone reading the line beside them.
+
+Line numbers were last walked on 2026-09-05, against `splash.cpp`, `ui.cpp`,
+`logo.h`, `splash_animations.h`, `convert_to_c.js` and `anim_editor.html`. They
+drift with any edit above them; the file and symbol survive, the number is a
+convenience.
