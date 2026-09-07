@@ -14,10 +14,21 @@ the code rather than trusted.
 **Revision 2026-09-07.** Compare that date against the copy you hold, and if
 they differ, re-take this whole file rather than patching yours. Sections get
 added and rewritten here, not only edited, so diffing the parts you already know
-about will not show you what is missing: VAS's 2026-08-13 copy was short two
-entire sections and a rewritten third, and the gap surfaced only because someone
-happened to relay a question that landed on it. That is the failure this line
-exists to end.
+about will not show you what is missing.
+
+Why the line exists: on 2026-09-05 VAS asked for a constant that had been in § 6
+since 08-17, working from the 08-13 issue, which was also missing § 7 outright.
+Neither side was careless — there was nothing in the file either of them could
+compare. They re-took it the same day, before this line existed. The stamp is
+here so that the next consumer does not have to depend on a question happening
+to land on the gap.
+
+*(Corrected 2026-09-07, at VAS's request and on their evidence. This paragraph
+first said their copy "was short two entire sections and a rewritten third" —
+it was one whole section plus additions inside three others, and by the time the
+sentence was written they had already re-taken the file two days earlier. A
+wrong claim about a consumer, in the document that consumer mirrors, is worth
+the four lines it takes to withdraw.)*
 
 Written 2026-08-13, re-checked line by line against the tree on 2026-09-05.
 Sections marked **stable** are contract; sections marked **may move** are
@@ -405,9 +416,11 @@ from what feels good under a thumb. Ours are both 20 and they are separate
 constants — `check_editor.js` asserts the hold field reads
 `inp.min = HOLD_MIN; inp.step = 20;`, so the day either moves, the other does
 not follow silently. VAS reached this floor from the step side on 2026-09-05:
-right value, wrong reason, and nothing anywhere could have noticed. If your
-editor has a step constant that happens to equal 20, that is a coincidence —
-mirror this row, not that one.
+right value, wrong reason, and nothing anywhere could have noticed. In their
+defence, the line they aligned against on 2026-08-06 read
+`inp.min = 20; inp.step = 20;` — two bare literals, no names, no comment. There
+was nothing there to tell apart. If your editor has a step constant that happens
+to equal 20, that is a coincidence — mirror this row, not that one.
 
 A frame costs `side * side` bytes of flash: 400 at 20, 1,600 at 40, 3,600 at 60.
 A 25-frame animation is 10 KB, 40 KB or 90 KB. Fine for a few, not for all — the
