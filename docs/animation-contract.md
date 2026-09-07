@@ -11,6 +11,14 @@ disagreement is only noticed by whoever is holding the hardware. Every claim
 below carries the file and line it came from, so the doc can be checked against
 the code rather than trusted.
 
+**Revision 2026-09-07.** Compare that date against the copy you hold, and if
+they differ, re-take this whole file rather than patching yours. Sections get
+added and rewritten here, not only edited, so diffing the parts you already know
+about will not show you what is missing: VAS's 2026-08-13 copy was short two
+entire sections and a rewritten third, and the gap surfaced only because someone
+happened to relay a question that landed on it. That is the failure this line
+exists to end.
+
 Written 2026-08-13, re-checked line by line against the tree on 2026-09-05.
 Sections marked **stable** are contract; sections marked **may move** are
 current fact and could change with a firmware release.

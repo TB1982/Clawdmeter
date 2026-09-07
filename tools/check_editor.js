@@ -109,6 +109,27 @@ check(`docs/animation-contract.md § 6 states CLIP_VERSION ${CLIP_VERSION}`,
 check(`docs/animation-contract.md § 6 states HOLD_MIN_MS ${HOLD_MIN_MS}`,
       new RegExp(`\\|\\s*\`HOLD_MIN_MS\`\\s*\\|\\s*${HOLD_MIN_MS}\\s*\\|`)
         .test(fs.readFileSync(path.join(__dirname, '..', 'docs', 'animation-contract.md'), 'utf8')));
+// The revision stamp is how a consumer who cannot see this repo decides whether
+// the copy in their tree is current. It is hand-bumped, so it is exactly the
+// kind of thing that gets forgotten — this compares it against the file's own
+// last commit date and fails once that edit is committed without a bump.
+{
+  const CONTRACT = path.join(__dirname, '..', 'docs', 'animation-contract.md');
+  const stamp = (fs.readFileSync(CONTRACT, 'utf8')
+                   .match(/\*\*Revision (\d{4}-\d{2}-\d{2})\.\*\*/) || [])[1];
+  check('docs/animation-contract.md carries a revision stamp', !!stamp);
+  let committed = null;
+  try {
+    committed = require('child_process')
+      .execSync('git log -1 --format=%cs -- docs/animation-contract.md',
+                {cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'ignore']})
+      .toString().trim() || null;
+  } catch { /* no git, no repo, no shallow history — not a failure */ }
+  if (stamp && committed)
+    check(`the revision stamp (${stamp}) is not older than the last commit to it (${committed})`,
+          stamp >= committed);
+}
+
 check(`HOLD_MIN matches format.js (${HOLD_MIN_MS})`,
       (html.match(/const HOLD_MIN = (\d+);/) || [])[1] === String(HOLD_MIN_MS));
 // A floor, not a grid. step=20 drives the arrow buttons; several scraped
