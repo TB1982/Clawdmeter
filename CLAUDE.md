@@ -34,7 +34,7 @@ Connects to a host daemon over BLE; daemon polls Anthropic API for usage data. T
 - Touch: **CST9220** via I2C (SDA=15, SCL=14, INT=11, addr=0x5A)
 - PMU: **AXP2101** on same I2C bus (addr=0x34) — battery, USB VBUS, PWR button IRQ
 - IMU: **QMI8658** on same I2C bus (addr=0x6B) — accelerometer for auto-rotation
-- Buttons: GPIO 0 (left → Space/voice-mode), GPIO 18 (right → Shift+Tab/mode-toggle), AXP PKEY (middle → cycle screens; on splash → cycle animations)
+- Buttons: GPIO 0 (left → Space/voice-mode), GPIO 18 (right → Shift+Tab/mode-toggle), AXP PKEY (middle → on splash: cycle animations; anywhere else: cycle brightness. hold past ~3s and release before ~6s: pairing)
 - Flash: **16 MB** (verified on hardware — `esptool flash_id` reports it), 8 MB embedded PSRAM. Uses `default_16MB.csv`. **Every env must declare its own `board_upload.flash_size` / `board_upload.maximum_size` / `board_build.partitions`**, because `board = esp32-s3-devkitc-1` declares 8 MB and that is what an env inherits by saying nothing. This env said nothing until 2026-08-17, so it built against the 8 MB layout: app0 capped at 3.34 MB (84.8% full) and the upper 8 MB described by no partition at all. Same binary, correct table: 43.2%.
 
 ### AMOLED-1.8 (newer port)
@@ -45,7 +45,7 @@ Connects to a host daemon over BLE; daemon polls Anthropic API for usage data. T
 - IMU: QMI8658 @ 0x6B (same chip — initialized for I2C bus health, rotation logic disabled)
 - IO expander: **XCA9554 / PCA9554** @ I2C 0x20. Gates LCD_RST, TP_RST, audio amp enable, and reads the PWR button. **`io_expander_init()` MUST run before `gfx->begin()` or `ft3168_init()`** — otherwise display/touch stay in reset and silently fail. PWR button is on EXIO4, active HIGH (verified empirically with the deleted `iox` serial debug command).
 - Orientation: **fixed at 0°**. IMU auto-rotation is disabled; `rotate_strip()` / `handle_rotation_change()` are excluded via `#ifndef BOARD_AMOLED_18`.
-- Buttons: GPIO 0 (BOOT → Space/voice-mode), XCA9554 EXIO4 (PWR → cycle screens; on splash → cycle animations). **No third button** (GPIO 18 button doesn't exist on this board).
+- Buttons: GPIO 0 (BOOT → Space/voice-mode), XCA9554 EXIO4 (PWR → on splash: cycle animations; anywhere else: cycle brightness. hold past ~3s and release before ~6s: pairing). **No third button** (GPIO 18 button doesn't exist on this board).
 
 ### AMOLED-1.8 (C6) — `waveshare_amoled_18_c6`
 ESP32-C6 sibling of the S3 1.8: same 368×448 SH8601 panel + FocalTech touch, different SoC and GPIO map. **All pins/edges below verified on hardware via temporary GPIO/IRQ scans, since Waveshare's wiki publishes no pin table and the third-party BSP's numbers were partly wrong.**
@@ -56,7 +56,7 @@ ESP32-C6 sibling of the S3 1.8: same 368×448 SH8601 panel + FocalTech touch, di
 - PMU: AXP2101 @ 0x34 (owned by `power.cpp`, not `board_init` — LCD isn't on an ALDO rail here).
 - IMU: QMI8658 @ 0x6B (init'd for bus health, rotation disabled).
 - Orientation: **fixed at 0°**, no rotation (no PSRAM headroom).
-- Buttons: **GPIO 9** (BOOT → Space/voice-mode, active LOW — *not* the docs' GPIO 0/9 guess; confirmed by scan), **AXP2101 PKEY** (PWR → cycle screens; on splash → cycle animations). The PKEY **SHORT-press IRQ fires on release** — that's the edge `power.cpp` acts on. No secondary button.
+- Buttons: **GPIO 9** (BOOT → Space/voice-mode, active LOW — *not* the docs' GPIO 0/9 guess; confirmed by scan), **AXP2101 PKEY** (PWR → on splash: cycle animations; anywhere else: cycle brightness. hold past ~3s and release before ~6s: pairing). The PKEY **SHORT-press IRQ fires on release** — that's the edge `power.cpp` acts on. No secondary button.
 
 ### AMOLED-2.06 (watch form factor) — `waveshare_amoled_206`
 - Display: **CO5300** AMOLED via QSPI (CS=12, **SCLK=11** ← same as 1.8, SDIO0..3=4..7, RST=8 direct GPIO). 410×502 portrait. Requires **`col_offset1 = 23`** in the `Arduino_CO5300` constructor — the panel's visible viewport sits at a 22–23 column offset inside the controller's internal RAM. Without it, a vertical strip of stale/garbage content shows through on the right edge (23 was picked empirically for centering; Waveshare's reference library uses 22). The 2.16 dodges this because its 480×480 viewport fills the controller's RAM.
@@ -66,7 +66,7 @@ ESP32-C6 sibling of the S3 1.8: same 368×448 SH8601 panel + FocalTech touch, di
 - RTC: **PCF85063** on the same I2C bus, powered through AXP2101 for retention. Not used by Clawdmeter but present for future features.
 - Audio codec: **ES8311** + ES7210 ADC on the same I2C bus. The amp path is unverified on this board, so `sound.cpp` no-ops (same posture as the C6 1.8) — the shared `chime.cpp` engine is ready to wire up once it's tested on hardware.
 - **No IO expander** despite the Waveshare wiki FAQ implying one. The schematic shows Key3/PWR wired directly to AXP2101 PWRON; touch reset and display reset are direct GPIOs. `board_init()` pulses LCD_RESET (GPIO 8) and TP_RESET (GPIO 9) before display/touch HAL init.
-- Buttons: GPIO 0 (BOOT → Space/voice-mode), AXP PKEY (PWR → cycle screens; hold-to-pair). **No third button**.
+- Buttons: GPIO 0 (BOOT → Space/voice-mode), AXP PKEY (PWR → on splash: cycle animations; anywhere else: cycle brightness; hold past ~3s and release before ~6s: pairing). **No third button**.
 - Flash: 32 MB. Uses `default_32MB.csv` partition table.
 
 ## Architecture
@@ -90,8 +90,15 @@ firmware/src/
     sim/                    — native desktop simulator: SDL2 + Arduino shims + scenario playback
     template/               — copy this to bootstrap a new port
   main.cpp                  — setup() + loop(): HAL calls only, zero #ifdef BOARD_*
-  ui.{h,cpp}                — 3-screen UI (splash, usage, bluetooth). compute_layout() picks fonts/positions from board_caps() (responsive — current breakpoint: H >= 460 → large, else compact)
-  splash.{h,cpp}            — 20×20 pixel-art engine. CELL = min(W,H)/20, centered.
+  ui.{h,cpp}                — 4 screens (splash, usage, weather, stocks). Weather and stocks are reached by turning the board, not by a button, so a board with has_rotation false cannot select them. compute_layout() picks fonts/positions from board_caps() (responsive — current breakpoint: H >= 460 → large, else compact)
+  splash.{h,cpp}            — pixel-art engine. Each animation carries its own grid side (20, 40 or 60 — see splash_animations.h); the rate groups in GROUP_NAMES decide what plays
+  splash_geometry.h         — cell size and LVGL scale; defines SPLASH_GRID (20). PSRAM-less boards render 1 px per cell and let LVGL upscale. SPLASH_GRID_MAX (the widest grid actually shipped) is generated into splash_animations.h, and splash.cpp static_asserts the two are equal on PSRAM-less builds — that is what blocks the C6 envs
+  idle.{cpp,h} + idle_cfg.h — auto-sleep and fade. **Owns panel brightness** — nothing else calls display_hal_set_brightness directly
+  brightness.{h,cpp}        — user brightness: 4 levels {64,128,200,255}, default 200, persisted to NVS, cycled by PWR on any non-splash screen
+  usage_rate.{h,cpp}        — burn-rate tracking; feeds the splash rate groups
+  chime.{h,cpp}             — reset-chime engine (whether it actually sounds is the board's sound_hal)
+  coin_band.{h,cpp}         — the coin band on the stocks screen
+  theme.h                   — shared colours
   ble.{h,cpp}               — NimBLE peripheral: custom data service + HID keyboard
   data.h                    — UsageData struct
   icons.h                   — icon arrays. Battery (5×) are RGB565A8 with alpha; rest are raw RGB565.
@@ -185,16 +192,26 @@ hardware for the last check, and immediately for anything panel-specific.
 
 On hardware, the firmware ships a `screenshot` serial command that dumps the LVGL framebuffer. `./screenshot.sh out.png [port]` captures a PNG sized to the active display (480×480 or 368×448). Script auto-picks the macOS/Linux default port and falls back to pio's bundled Python if pyserial isn't on the system Python.
 
-Other serial commands, both there so a state that normally needs waiting can be
-triggered on demand: `buzz` fires the reset chime, `party` fires the reset
-celebration (30s of `dance djmix` on the splash and the corner badge). Without
-`party` you'd have to wait out a real 5-hour window refill to see it.
+The other serial commands all exist for the same reason: a state that normally
+needs waiting, or a physical act, triggered on demand.
+
+| command | what it does |
+|---|---|
+| `screenshot` | dump the LVGL framebuffer (see above) |
+| `buzz` | fire the reset chime |
+| `party` | fire the reset celebration (30s of `dance djmix` on the splash and the corner badge) — otherwise you'd wait out a real 5-hour window refill |
+| `next` | next splash animation, same as PWR on the splash. Without it the rate groups decide what's showing and you can't fake a usage rate from here, which makes `screenshot` useless for checking one animation |
+| `weather` | toggle the weather view, normally reached only by turning the board |
+| `stocks` | toggle the stocks view, same reason |
+| `rot` | print the current rotation quadrant. `imu.cpp` only prints on change, which tells you nothing when the board hasn't moved — and "what does it call the way it normally sits" is the question that matters when the gesture behaves backwards |
 
 The boot screen is `SCREEN_SPLASH` and only advances on a physical button
 press, so a fresh flash will sit on the splash. On hardware that still means
 **temporarily changing the default boot screen** in `main.cpp` (search for
-`ui_show_screen(SCREEN_SPLASH);`) to `SCREEN_USAGE` / `SCREEN_CONTROLLER` /
-`SCREEN_BLUETOOTH`, then reverting before committing. In the sim, don't — use
+`ui_show_screen(SCREEN_SPLASH);`, at `main.cpp:306`) to `SCREEN_USAGE` /
+`SCREEN_WEATHER` / `SCREEN_STOCKS`, then reverting before committing. Those
+four are the whole of `screen_t` — there is no bluetooth or controller screen.
+In the sim, don't — use
 `sim_shot.sh "1000:tap"` instead. The edit-and-revert dance is how the waiting
 panel was verified, and it is exactly the kind of temporary change that gets
 committed by accident.
@@ -218,8 +235,18 @@ committed by accident.
 
 ## Splash animations
 
-16 × 20×20 pixel-art creature animations: 13 scraped from
-[claudepix.vercel.app](https://claudepix.vercel.app) plus 3 composed locally.
+30 pixel-art animations, in three grid sizes — 12 at 20×20, 13 at 40×40, 5 at
+60×60 (`SPLASH_GRID_MAX` is 60, which is what blocks the C6 builds above).
+Six categories: Official 15, Idle 6, Dance 3, Weather 3, Work 2, Stocks 1 —
+the Official ones came in through `import_official.js`, the rest are scraped
+from [claudepix.vercel.app](https://claudepix.vercel.app) or composed here.
+
+**Don't count them by hand — the live list is
+[`docs/animation-catalogue.md`](docs/animation-catalogue.md)**, generated by
+`node tools/sync_animations.js` straight from `splash_animations.h` and
+`splash.cpp`, so it cannot disagree with the build. The numbers in this
+paragraph are a snapshot (2026-10-04) and will drift; that file won't.
+
 Pipeline:
 
 ```bash
