@@ -11,6 +11,8 @@ import calendar
 import datetime
 import getpass
 import json
+import logging
+import logging.handlers
 import os
 import re
 import shutil
@@ -63,8 +65,93 @@ class TokenExpired(Exception):
     (see TokenRenewer); failing that, the caller signals "No data" to the device."""
 
 
+# ---------------------------------------------------------------------------
+# Logging — this daemon owns and rotates its own file
+#
+# DELIBERATE macOS-ONLY DIVERGENCE (2026-10-04). The Linux and Windows daemons
+# still print to stdout and let their supervisor own the file; only this one
+# rotates. That asymmetry is a decision, not an oversight: this is the daemon
+# running on the one desk that has a board on it, and the change is not going
+# upstream. The usual "a change here means three changes" rule does not apply
+# to this block — don't port it to the other two to tidy up the inconsistency.
+#
+# Why the daemon rotates instead of letting newsyslog do it: launchd holds
+# StandardOutPath open for the life of the process. Anything that renames or
+# deletes that file leaves the daemon writing into an invisible inode while the
+# visible log stays permanently empty — with no error, and discovered only the
+# next time someone actually needs the log. A handler inside the process
+# reopens correctly because it is the one doing the rotating.
+#
+# The plist's StandardOutPath / StandardErrorPath are left pointing at
+# *.out.log / *.err.log on purpose. Nothing routes through them any more except
+# a traceback on the way out, which is exactly what a crash file should hold.
+#
+# Written after the log reached 156,988 lines of unrotated history (it had run
+# since August) and finding the end of it was the slow part of diagnosing an
+# expired token.
+
+LOG_FILE = Path.home() / "Library" / "Logs" / "claude-usage-daemon.log"
+LOG_MAX_BYTES = 5 * 1024 * 1024   # ~10 days of healthy once-a-minute polling
+LOG_BACKUPS = 3                   # 20 MB ceiling, ~6 weeks of history
+
+_logger: logging.Logger | None = None
+
+
+def setup_logging() -> None:
+    """Point :func:`log` at the rotating file. Called from main(), nowhere else.
+
+    Explicit rather than lazy-on-first-log. The test suite imports this module
+    and calls log() for real, so a lazy setup quietly wrote test output —
+    `Active plan: /a`, fake config dirs and all — into the production log the
+    first time the suite ran. Until main() calls this, log() prints to stdout
+    exactly as it always did, which is what pytest captures and discards.
+    """
+    global _logger
+
+    lg = logging.getLogger("clawdmeter")
+    lg.setLevel(logging.INFO)
+    lg.propagate = False
+    lg.handlers.clear()  # idempotent: a second call must not double every line
+    # Timestamps carry the date. The old format was time-only, so a log
+    # spanning days forced you to date lines by decoding epochs out of the
+    # payloads to tell which 04:08 you were looking at.
+    fmt = logging.Formatter("[%(asctime)s] %(message)s",
+                            datefmt="%Y-%m-%d %H:%M:%S")
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.handlers.RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=LOG_MAX_BYTES,
+            backupCount=LOG_BACKUPS,
+            encoding="utf-8",
+        )
+    except OSError as e:
+        # Logging must never be the thing that takes the daemon down; leave
+        # _logger unset and log() keeps printing to stdout.
+        print(f"[log] cannot open {LOG_FILE}: {e}; falling back to stdout",
+              flush=True)
+        return
+    handler.setFormatter(fmt)
+    lg.addHandler(handler)
+
+    # Run by hand from a terminal and the file would swallow everything, so the
+    # daemon would look dead. Under launchd stdout is a file, so this is off.
+    try:
+        if sys.stdout is not None and sys.stdout.isatty():
+            stream = logging.StreamHandler(sys.stdout)
+            stream.setFormatter(fmt)
+            lg.addHandler(stream)
+    except (AttributeError, ValueError):
+        pass
+
+    _logger = lg
+
+
 def log(msg: str) -> None:
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+    if _logger is None:
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
+    else:
+        _logger.info(msg)
 
 
 def _extract_access_token(blob: str) -> str | None:
@@ -1277,6 +1364,7 @@ async def connect_and_run(target, stop_event: asyncio.Event) -> bool:
 
 
 async def main() -> None:
+    setup_logging()  # before the first log() call, or the banner goes to stdout
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
 
