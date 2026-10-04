@@ -129,10 +129,22 @@ Useful commands:
 
 ```bash
 launchctl list | grep claude-usage                                          # check it's running
-tail -F ~/Library/Logs/claude-usage-daemon.out.log                          # live logs
+tail -F ~/Library/Logs/claude-usage-daemon.log                              # live logs
+tail -F ~/Library/Logs/claude-usage-daemon.err.log                          # crashes only
 launchctl unload ~/Library/LaunchAgents/com.user.claude-usage-daemon.plist  # stop
 launchctl load -w ~/Library/LaunchAgents/com.user.claude-usage-daemon.plist # start
 ```
+
+The daemon writes `claude-usage-daemon.log` itself and rotates it at 5 MB,
+keeping three old files (20 MB and roughly six weeks, whichever comes first).
+`*.out.log` and `*.err.log` are launchd's own capture and now hold nothing but
+a traceback if the daemon ever dies outright.
+
+Don't rotate the log from outside the daemon (`newsyslog`, a `mv`, a `rm`):
+launchd and the daemon hold the file open for the life of the process, so
+renaming or deleting it leaves the daemon writing into an invisible inode while
+the file you're tailing stays empty — with no error. To reclaim space by hand,
+truncate in place instead: `: > ~/Library/Logs/claude-usage-daemon.log`.
 
 ## Linux installation
 
